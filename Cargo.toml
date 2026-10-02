@@ -1,0 +1,23 @@
+[package]
+name = "mactions"
+version = "0.1.0"
+edition = "2021"
+description = "A small CLI and web manager for GitHub Actions runners on macOS"
+
+[dependencies]
+anyhow = "1"
+fs2 = "0.4"
+libc = "0.2"
+plist = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tiny_http = "0.12"
+tempfile = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

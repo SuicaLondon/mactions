@@ -1,0 +1,29 @@
+{
+  "platform": "Darwin",
+  "architecture": "arm64",
+  "sampling": "ps RSS, approximately 20 ms plus ps overhead; maxima may miss short spikes",
+  "measurements": {
+    "idle_empty_fleet": {
+      "manager_kib": 2192,
+      "tree_kib": 2192,
+      "samples": 48
+    },
+    "active_empty_fleet_http": {
+      "manager_kib": 2992,
+      "tree_kib": 2992,
+      "samples": 48
+    },
+    "create_missing_authentication": {
+      "manager_kib": 3488,
+      "tree_kib": 5920,
+      "samples": 23
+    }
+  },
+  "limitations": [
+    "No actual runner registration, download, configuration, or job was measured.",
+    "Create measurement is the missing-authentication failure path with the real bundled gh.",
+    "Browser RSS is excluded and not separately measured.",
+    "No official runner or job process was started for this measurement.",
+    "The Node.js measurement harness and its ps processes are excluded from the server process tree."
+  ]
+}

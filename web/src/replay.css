@@ -1,0 +1,30 @@
+@layer components {
+  .replay-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .replay-controls { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .replay-identity { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .replay-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); font-size: 10px; }
+  .replay-badge svg { width: 12px; height: 12px; }
+  .replay-identity strong { overflow-wrap: anywhere; font-size: 12px; font-weight: 600; }
+  .replay-identity > a { display: inline-flex; gap: 4px; align-items: center; font-size: 10px; margin-left: auto; text-decoration: none; }
+  .replay-identity > a svg { width: 11px; height: 11px; }
+  .replay-transport { display: flex; align-items: center; gap: 12px; }
+  .replay-play { min-width: 77px; min-height: 32px; font-size: 11px; }
+  .replay-play svg { width: 13px; height: 13px; }
+  .replay-transport > input[type='range'] { flex: 1; min-width: 40px; padding: 0; cursor: pointer; accent-color: var(--accent); border: 0; background: transparent; }
+  .replay-position { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .replay-position span { color: var(--secondary); }
+  .replay-speed { display: inline-flex; align-items: center; gap: 6px; color: var(--secondary); font-size: 10px; }
+  .replay-speed select { color: var(--text); font-size: 11px; }
+  .replay-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-top: 10px; color: var(--secondary); font-size: 10px; }
+  .replay-import { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .replay-import label { font-size: 11px; font-weight: 550; }
+  .replay-import input { max-width: 100%; font-size: 11px; }
+  .replay-import p { margin: 0; color: var(--secondary); font-size: 11px; }
+  @media (max-width: 600px) {
+    .replay-controls { padding: 12px; }
+    .replay-transport { flex-wrap: wrap; gap: 10px; }
+    .replay-position { margin-left: auto; }
+    .replay-speed { margin-left: auto; }
+    .replay-transport > input[type='range'] { min-width: 100px; }
+  }
+}

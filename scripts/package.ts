@@ -1,0 +1,60 @@
+// Developer packaging entry point. End users do not need Node.js or the build tools.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { repo, bundlePath } from './lib.ts';
+
+const ghVersion = '2.96.0';
+const ghArch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+const bundle = bundlePath();
+const run = (command: string, args: string[]) => execFileSync(command, args, { cwd: repo, stdio: 'inherit' });
+const checksum = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+run('npm', ['--prefix', 'web', 'ci']);
+run('npm', ['--prefix', 'web', 'run', 'build']);
+run(process.execPath, ['--experimental-strip-types', 'scripts/frontend-notices.ts']);
+run('cargo', ['build', '--release', '--locked']);
+run(process.execPath, ['--experimental-strip-types', 'scripts/generate-notices.ts']);
+
+for (const directory of ['libexec', 'licenses', 'docs/adr']) fs.mkdirSync(path.join(bundle, directory), { recursive: true });
+const downloads = path.join(repo, 'dist/downloads');
+fs.mkdirSync(downloads, { recursive: true });
+const archiveName = `gh_${ghVersion}_macOS_${ghArch}.zip`;
+const checksumsName = `gh_${ghVersion}_checksums.txt`;
+const base = `https://github.com/cli/cli/releases/download/v${ghVersion}`;
+for (const name of [checksumsName, archiveName]) {
+  const destination = path.join(downloads, name);
+  if (fs.existsSync(destination)) continue;
+  const partial = `${destination}.partial`;
+  try {
+    run('/usr/bin/curl', ['--fail', '--location', '--proto', '=https', '--proto-redir', '=https', '--silent', '--show-error', `${base}/${name}`, '-o', partial]);
+    fs.renameSync(partial, destination);
+  } finally { fs.rmSync(partial, { force: true }); }
+}
+const expected = fs.readFileSync(path.join(downloads, checksumsName), 'utf8').split('\n')
+  .map(line => line.trim().split(/\s+/)).find(([, name]) => name === archiveName)?.[0];
+const archive = path.join(downloads, archiveName);
+if (!expected || checksum(archive) !== expected) throw new Error('GitHub CLI checksum mismatch');
+
+const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'mactions-package-'));
+try {
+  run('/usr/bin/ditto', ['-x', '-k', archive, stage]);
+  const ghRoot = path.join(stage, `gh_${ghVersion}_macOS_${ghArch}`);
+  for (const [source, target] of [[path.join(repo, 'target/release/mactions'), 'mactions'], [path.join(ghRoot, 'bin/gh'), 'libexec/gh']]) {
+    fs.copyFileSync(source, path.join(bundle, target));
+    fs.chmodSync(path.join(bundle, target), 0o755);
+  }
+  fs.copyFileSync(path.join(ghRoot, 'LICENSE'), path.join(bundle, 'licenses/GitHub-CLI-LICENSE'));
+  const files = ['README.md', 'TARGET.md', 'docs/validation.md', 'docs/script-conventions.md', 'docs/adr/0001-use-rust.md'];
+  if (fs.existsSync(path.join(repo, 'docs/memory-measurements.json'))) files.push('docs/memory-measurements.json');
+  for (const file of files) fs.copyFileSync(path.join(repo, file), path.join(bundle, file));
+  for (const name of ['THIRD-PARTY-NOTICES.md', 'DEPENDENCY-LICENSES.txt', 'FRONTEND-LICENSES.txt']) {
+    fs.copyFileSync(path.join(repo, 'docs', name), path.join(bundle, 'licenses', name));
+  }
+  const release = `${bundle}.tar.gz`;
+  run('/usr/bin/tar', ['-czf', release, '-C', path.dirname(bundle), path.basename(bundle)]);
+  fs.writeFileSync(`${release}.sha256`, `${checksum(release)}  ${path.relative(repo, release)}\n`);
+  console.log(`Created ${path.relative(repo, release)}`);
+} finally { fs.rmSync(stage, { recursive: true, force: true }); }
