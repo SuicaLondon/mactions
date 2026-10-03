@@ -104,7 +104,8 @@ for (const [timeZone, locale, dateTime, time, preciseTime, shortDate] of [
       ['--experimental-strip-types', '--input-type=module', '--eval', code],
       { env: { ...process.env, TZ: timeZone, LANG: locale, LC_ALL: locale } },
     );
-    const output: unknown = JSON.parse(stdout);
+    // ICU versions use different Unicode spaces in localized date and time output.
+    const output: unknown = JSON.parse(stdout.replace(/[\u00a0\u2009\u202f]/g, ' '));
     assert.deepEqual(output, {
       dateTime,
       shortDate,
