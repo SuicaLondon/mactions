@@ -1,0 +1,17 @@
+{
+  "description": "Format repository code after the main agent finishes editing.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --experimental-strip-types \"$(git rev-parse --show-toplevel)/scripts/hooks/agent-stop.ts\"",
+            "timeout": 150,
+            "statusMessage": "Formatting repository code"
+          }
+        ]
+      }
+    ]
+  }
+}

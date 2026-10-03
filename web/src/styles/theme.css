@@ -1,0 +1,74 @@
+@theme inline {
+  --color-foreground: var(--text);
+  --color-muted: var(--secondary);
+  --color-canvas: var(--background);
+  --color-surface: var(--surface);
+  --color-toolbar: var(--toolbar);
+  --color-inspector: var(--inspector);
+  --color-line: var(--line);
+  --color-control: var(--control);
+  --color-control-border: var(--control-border);
+  --color-accent: var(--accent);
+  --color-danger: var(--red);
+  --color-focus: var(--focus);
+  --color-activity-link: var(--activity-link);
+  --color-activity-success: var(--activity-success);
+  --color-activity-failure: var(--activity-failure);
+  --color-activity-running: var(--activity-running);
+  --color-activity-hover: var(--activity-hover);
+}
+
+@layer components {
+  :root {
+    @apply bg-canvas text-base text-foreground;
+    color-scheme: light dark;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-synthesis: none;
+    --background: #f5f5f7;
+    --surface: #fff;
+    --toolbar: #f3f3f5;
+    --inspector: #f8f8fa;
+    --text: #252527;
+    --secondary: #737377;
+    --line: #dedee2;
+    --stripe: #f5f5f7;
+    --control: #fff;
+    --control-border: #00000024;
+    --accent: #007aff;
+    --selection: #086bd9;
+    --red: #c63532;
+    --focus: #007aff70;
+  }
+  @variant dark {
+    :root {
+      --background: #202022;
+      --surface: #1e1e20;
+      --toolbar: #2b2b2d;
+      --inspector: #252527;
+      --text: #eeeeef;
+      --secondary: #a3a3a9;
+      --line: #ffffff13;
+      --stripe: #ffffff04;
+      --control: #444446;
+      --control-border: #ffffff13;
+      --accent: #0a84ff;
+      --selection: #185ea7;
+      --red: #ff736a;
+    }
+  }
+}
+
+@layer activity {
+  .execution-shell {
+    --activity-link: #0969da;
+    --activity-success: #1a7f37;
+    --activity-running: #9a6700;
+    --activity-failure: #cf222e;
+    --activity-hover: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  }
+}
+
+@utility bg-grid-dots {
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: --spacing(4) --spacing(4);
+}
