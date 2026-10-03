@@ -2,8 +2,12 @@
 /dist/
 *.partial
 .DS_Store
-/web/node_modules/
+node_modules/
 /web/dist/
 /web/coverage/
 
 /recordings/
+
+# Dependency notices are generated during packaging.
+/docs/DEPENDENCY-LICENSES.txt
+/docs/FRONTEND-LICENSES.txt

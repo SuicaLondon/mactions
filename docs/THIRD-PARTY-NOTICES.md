@@ -1,5 +1,7 @@
 # Third-party notices
 
+Dependency license collections are generated into ignored `dist/licenses/` during packaging and copied into the release bundle. They are not tracked in the source repository.
+
 mactions embeds its web assets and links Rust dependencies listed in `Cargo.lock`. Their license texts are included in `DEPENDENCY-LICENSES.txt` in release bundles.
 
 The frontend is built with React, TanStack Query, Tailwind CSS, and Vite. Versions are locked in `web/package-lock.json`; license texts for shipped frontend dependencies and the asset build tools are included in `FRONTEND-LICENSES.txt`. Node.js and frontend development tools are not shipped as production services.

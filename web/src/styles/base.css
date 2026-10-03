@@ -1,0 +1,194 @@
+@layer components {
+  * {
+    @apply box-border;
+  }
+  body {
+    @apply m-0 text-xs;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  button {
+    @apply inline-flex min-h-7 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-control px-2.75 py-1 whitespace-nowrap text-foreground;
+    @apply border border-control-border;
+    @apply shadow-xs;
+  }
+  button:hover:not(:disabled) {
+    filter: brightness(0.96);
+  }
+  button:active:not(:disabled) {
+    @apply translate-y-px;
+  }
+  button:disabled {
+    @apply cursor-default opacity-40;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-2 outline-offset-2 outline-focus;
+  }
+  button.primary {
+    @apply bg-accent font-medium;
+    border-color: #0000000a;
+    color: #fff;
+  }
+  button.danger {
+    @apply text-danger;
+  }
+  button.primary.danger {
+    @apply bg-danger;
+    color: #fff;
+  }
+  svg {
+    @apply inline-block h-4.5 w-4.5 flex-none;
+    vertical-align: middle;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.65;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  [hidden] {
+    display: none !important;
+  }
+}
+@layer components {
+  h1 {
+    @apply m-0 text-sm;
+    @apply font-semibold tracking-tight;
+  }
+  table {
+    @apply w-full table-fixed text-xs;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  thead {
+    @apply sticky top-0 z-1;
+  }
+  th {
+    @apply h-7.25 bg-surface px-3 py-0 text-left text-xs font-medium text-muted;
+    @apply border-b border-line;
+  }
+  td {
+    @apply h-10.5 overflow-hidden px-3 py-0 text-ellipsis whitespace-nowrap;
+    @apply border-b border-transparent;
+  }
+  td:first-child {
+    @apply pl-5.5 font-medium;
+  }
+  tbody tr {
+    @apply cursor-default;
+    @apply -outline-offset-2!;
+  }
+  tbody tr:nth-child(even) {
+    background: var(--stripe);
+  }
+  tbody tr:hover:not([aria-selected='true']) {
+    background: #007aff09;
+  }
+  tbody tr[aria-selected='true'] {
+    color: #fff;
+    background: var(--selection);
+  }
+
+  dl {
+    @apply m-0 text-xs;
+  }
+  dt {
+    @apply text-muted;
+  }
+  dd {
+    @apply m-0 leading-normal;
+    overflow-wrap: anywhere;
+  }
+  dialog {
+    @apply m-auto w-full max-w-md rounded-xl bg-toolbar p-6 text-foreground;
+    @apply border border-line;
+    @apply shadow-xl;
+  }
+  dialog::backdrop {
+    background: #00000026;
+  }
+  dialog h2 {
+    @apply mx-0 mt-0 mb-2.5 text-sm;
+    @apply font-semibold tracking-tight;
+    overflow-wrap: anywhere;
+  }
+  input {
+    @apply min-h-7 min-w-0 rounded-md bg-surface px-1.75 py-1.25 text-foreground;
+    @apply border border-control-border;
+  }
+  select {
+    @apply min-h-7 min-w-0 rounded-md bg-surface px-1.75 py-1.25 text-foreground;
+    @apply border border-control-border;
+  }
+  input::placeholder {
+    @apply text-muted opacity-75;
+  }
+
+  @variant dark {
+    button:hover:not(:disabled) {
+      filter: brightness(1.15);
+    }
+  }
+  @variant dark {
+    dialog {
+      @apply border-line;
+      @apply shadow-2xl;
+    }
+  }
+
+  @variant max-md {
+    td:first-child {
+      @apply pl-4;
+    }
+  }
+  @variant max-md {
+    td {
+      @apply px-2 py-0 text-xs;
+    }
+  }
+  @variant max-md {
+    th {
+      @apply px-2 py-0;
+    }
+  }
+  @variant motion-reduce {
+    button:active:not(:disabled) {
+      @apply transform-none;
+    }
+  }
+  a {
+    @apply text-accent;
+  }
+  dialog {
+    @apply max-h-11/12 w-full max-w-lg overflow-y-auto;
+  }
+  summary {
+    @apply cursor-pointer;
+  }
+  dialog {
+    overscroll-behavior: contain;
+  }
+  tbody tr[aria-selected='true'] {
+    @apply text-foreground;
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+  td {
+    @apply h-9.5;
+  }
+}
+@layer activity {
+  @variant dark {
+    .execution-shell {
+      --activity-link: #58a6ff;
+      --line: #3d444d;
+      --activity-success: #3fb950;
+      --activity-running: #d29922;
+      --activity-failure: #f85149;
+    }
+  }
+}

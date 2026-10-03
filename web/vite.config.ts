@@ -1,18 +1,20 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+const backendOrigin = `http://127.0.0.1:${process.env.MACTIONS_DEV_PORT ?? '8787'}`;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8787',
+        target: backendOrigin,
         changeOrigin: true,
         // Rust checks same-origin mutations. Only the local development proxy rewrites it.
         configure(proxy) {
-          proxy.on('proxyReq', request => {
-            request.setHeader('Origin', 'http://127.0.0.1:8787');
+          proxy.on('proxyReq', (request) => {
+            request.setHeader('Origin', backendOrigin);
           });
         },
       },

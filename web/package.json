@@ -5,17 +5,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run check && vite build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc -p ../scripts/tsconfig.json"
+    "typecheck": "tsc --noEmit && tsc -p lint/tsconfig.json && tsc -p ../scripts/tsconfig.json",
+    "lint": "node --experimental-strip-types node_modules/eslint/bin/eslint.js . ../scripts ../eslint.config.mjs ../lint-staged.config.mjs --max-warnings=0 && node --experimental-strip-types --test lint/**/*.test.ts",
+    "lint:fix": "node --experimental-strip-types node_modules/eslint/bin/eslint.js . ../scripts ../eslint.config.mjs ../lint-staged.config.mjs --fix",
+    "format": "npm run lint:fix && node --experimental-strip-types node_modules/prettier/bin/prettier.cjs --write . ../scripts ../eslint.config.mjs ../lint-staged.config.mjs ../package.json ../README.md ../AGENTS.md \"../docs/**/*.md\" ../.vscode/settings.json --config prettier.config.mjs",
+    "format:check": "node --experimental-strip-types node_modules/prettier/bin/prettier.cjs --check . ../scripts ../eslint.config.mjs ../lint-staged.config.mjs ../package.json ../README.md ../AGENTS.md \"../docs/**/*.md\" ../.vscode/settings.json --config prettier.config.mjs",
+    "check": "npm run lint && npm run format:check && npm run typecheck",
+    "check:all": "npm run build && npm test && cargo fmt --manifest-path ../Cargo.toml --all -- --check && cargo clippy --manifest-path ../Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path ../Cargo.toml --locked"
   },
   "dependencies": {
+    "@date-fns/utc": "2.1.1",
     "@tanstack/react-query": "5.103.2",
+    "cn": "0.4.0",
+    "date-fns": "4.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-select": "^5.10.2"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@shadcn/lint": "0.2.0",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
@@ -23,11 +34,24 @@
     "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@typescript-eslint/utils": "8.71.0",
     "@vitejs/plugin-react": "6.1.1",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "eslint-plugin-react-x": "5.23.5",
+    "eslint-plugin-simple-import-sort": "12.1.1",
     "jsdom": "29.1.1",
+    "prettier": "3.9.9",
+    "prettier-plugin-tailwindcss": "0.8.1",
     "tailwindcss": "4.3.3",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
     "vite": "8.3.0",
     "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": "^22.13.0 || >=24.0.0"
   }
 }
