@@ -57,6 +57,92 @@ jobs:
         run: npm run check:all
       - name: Build release bundle
         run: npm run package
+      - name: Sign and notarize release bundle
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            # Trim accidental whitespace before validating and using each secret.
+            value="${!name:-}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            if [[ -z "$value" ]]; then
+              echo "Missing required release secret: $name" >&2
+              exit 1
+            fi
+            masked_value="${value//%/%25}"
+            masked_value="${masked_value//$'\r'/%0D}"
+            masked_value="${masked_value//$'\n'/%0A}"
+            echo "::add-mask::$masked_value"
+            export "$name=$value"
+          done
+
+          keychain="$RUNNER_TEMP/mactions-signing.keychain-db"
+          certificate="$RUNNER_TEMP/mactions-signing.p12"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          umask 077
+          printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -t cert -f pkcs12 -k "$keychain" -T /usr/bin/codesign >/dev/null
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain"
+          identity="$(security find-identity -v -p codesigning "$keychain" | \
+            awk -v team="$APPLE_TEAM_ID" 'index($0, "\"Developer ID Application: ") && index($0, "(" team ")\"") { print $2 }')"
+          if [[ ! "$identity" =~ ^[A-Fa-f0-9]{40}$ ]]; then
+            echo 'Expected one valid Developer ID Application identity for APPLE_TEAM_ID' >&2
+            exit 1
+          fi
+
+          bundle="$(node --experimental-strip-types --input-type=module -e \
+            "import { bundlePath } from './scripts/shared/paths.ts'; console.log(bundlePath());")"
+          codesign --force --sign "$identity" --keychain "$keychain" \
+            --options runtime --timestamp "$bundle/mactions"
+          codesign --verify --strict --verbose=2 "$bundle/mactions"
+          # Keep GitHub CLI's upstream Developer ID signature intact.
+          codesign --verify --strict --verbose=2 "$bundle/libexec/gh"
+
+          xcrun notarytool store-credentials mactions-notary --keychain "$keychain" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" >/dev/null
+          submission="$RUNNER_TEMP/mactions-notarization.zip"
+          result="$RUNNER_TEMP/mactions-notarization.json"
+          ditto -c -k --keepParent "$bundle" "$submission"
+          if ! xcrun notarytool submit "$submission" --keychain-profile mactions-notary \
+            --keychain "$keychain" --wait --timeout 20m --output-format json > "$result"; then
+            cat "$result"
+            exit 1
+          fi
+          node --input-type=module - "$result" <<'NODE'
+          import fs from 'node:fs';
+          const result = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (result.status !== 'Accepted') {
+            throw new Error(`Notarization ${result.id} ended with status ${result.status}`);
+          }
+          console.log(`Notarization accepted: ${result.id}`);
+          NODE
+
+          # Archive the same signed bytes that Apple accepted; bare CLIs cannot be stapled.
+          archive="$bundle.tar.gz"
+          tar -czf "$archive" -C "$(dirname "$bundle")" "$(basename "$bundle")"
+          (cd "$(dirname "$archive")" && shasum -a 256 "$(basename "$archive")" > "$(basename "$archive").sha256")
+      - name: Remove signing credentials
+        if: ${{ always() }}
+        run: |
+          keychain="$RUNNER_TEMP/mactions-signing.keychain-db"
+          if [[ -f "$keychain" ]]; then
+            security delete-keychain "$keychain"
+          fi
+          rm -f "$RUNNER_TEMP/mactions-signing.p12" "$RUNNER_TEMP/mactions-notarization.zip"
       - name: Check bundled executables
         run: |
           ./dist/mactions-*-macos-arm64/mactions --version
