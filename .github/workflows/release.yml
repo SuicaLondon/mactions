@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HUSKY: '0'
+
+jobs:
+  build:
+    name: Package (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - name: Validate release tag and architecture
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: |
+          node --experimental-strip-types --input-type=module <<'NODE'
+          import { packageVersion } from './scripts/shared/paths.ts';
+          if (process.env.RELEASE_TAG !== `v${packageVersion()}`) {
+            throw new Error('Release tag must match the Cargo.toml package version');
+          }
+          if (process.arch !== process.env.RELEASE_ARCH) {
+            throw new Error('Release runner architecture does not match the artifact architecture');
+          }
+          NODE
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix web ci
+      - name: Lint, build, and test
+        run: npm run check:all
+      - name: Build release bundle
+        run: npm run package
+      - name: Check bundled executables
+        run: |
+          ./dist/mactions-*-macos-${{ matrix.arch }}/mactions --version
+          ./dist/mactions-*-macos-${{ matrix.arch }}/libexec/gh --version
+      - name: Upload release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.arch }}
+          path: |
+            dist/mactions-*-macos-${{ matrix.arch }}.tar.gz
+            dist/mactions-*-macos-${{ matrix.arch }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Publish archives and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release/*.tar.gz release/*.sha256 \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          else
+            release_options=()
+            if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
+              release_options+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" release/*.tar.gz release/*.sha256 \
+              --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
+              --title "$RELEASE_TAG" "${release_options[@]}"
+          fi

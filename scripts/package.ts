@@ -65,6 +65,8 @@ function downloadGitHubCli(): string {
 function copyDocumentation() {
   const files = [
     'README.md',
+    'docs/user-guide.md',
+    'docs/development.md',
     'docs/product-scope.md',
     'docs/domain.md',
     'docs/activity-navigation.md',
@@ -107,10 +109,7 @@ function main() {
     copyDocumentation();
     const release = `${bundle}.tar.gz`;
     run('/usr/bin/tar', ['-czf', release, '-C', path.dirname(bundle), path.basename(bundle)]);
-    fs.writeFileSync(
-      `${release}.sha256`,
-      `${checksum(release)}  ${path.relative(repo, release)}\n`,
-    );
+    fs.writeFileSync(`${release}.sha256`, `${checksum(release)}  ${path.basename(release)}\n`);
     console.log(`Created ${path.relative(repo, release)}`);
   } finally {
     fs.rmSync(stage, { recursive: true, force: true });
