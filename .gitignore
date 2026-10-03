@@ -8,6 +8,13 @@ node_modules/
 
 /recordings/
 
+# Local environment, registry, and runner credentials.
+.env
+.env.*
+!.env.example
+.npmrc
+.credentials*
+
 # Dependency notices are generated during packaging.
 /docs/DEPENDENCY-LICENSES.txt
 /docs/FRONTEND-LICENSES.txt

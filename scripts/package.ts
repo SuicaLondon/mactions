@@ -88,6 +88,7 @@ function copyDocumentation() {
 
 function main() {
   buildRelease();
+  fs.rmSync(bundle, { recursive: true, force: true });
   for (const directory of ['libexec', 'licenses', 'docs/adr'])
     fs.mkdirSync(path.join(bundle, directory), { recursive: true });
   const archive = downloadGitHubCli();
