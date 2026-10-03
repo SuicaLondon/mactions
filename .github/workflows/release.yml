@@ -16,17 +16,9 @@ env:
 
 jobs:
   build:
-    name: Package (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    name: Package (arm64)
+    runs-on: macos-15
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,14 +35,13 @@ jobs:
       - name: Validate release tag and architecture
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-          RELEASE_ARCH: ${{ matrix.arch }}
         run: |
           node --experimental-strip-types --input-type=module <<'NODE'
           import { packageVersion } from './scripts/shared/paths.ts';
           if (process.env.RELEASE_TAG !== `v${packageVersion()}`) {
             throw new Error('Release tag must match the Cargo.toml package version');
           }
-          if (process.arch !== process.env.RELEASE_ARCH) {
+          if (process.arch !== 'arm64') {
             throw new Error('Release runner architecture does not match the artifact architecture');
           }
           NODE
@@ -68,15 +59,15 @@ jobs:
         run: npm run package
       - name: Check bundled executables
         run: |
-          ./dist/mactions-*-macos-${{ matrix.arch }}/mactions --version
-          ./dist/mactions-*-macos-${{ matrix.arch }}/libexec/gh --version
+          ./dist/mactions-*-macos-arm64/mactions --version
+          ./dist/mactions-*-macos-arm64/libexec/gh --version
       - name: Upload release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-${{ matrix.arch }}
+          name: release-arm64
           path: |
-            dist/mactions-*-macos-${{ matrix.arch }}.tar.gz
-            dist/mactions-*-macos-${{ matrix.arch }}.tar.gz.sha256
+            dist/mactions-*-macos-arm64.tar.gz
+            dist/mactions-*-macos-arm64.tar.gz.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -91,8 +82,7 @@ jobs:
       - name: Download release files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: release-*
-          merge-multiple: true
+          name: release-arm64
           path: release
       - name: Publish archives and checksums
         env:

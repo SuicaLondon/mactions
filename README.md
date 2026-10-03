@@ -57,7 +57,7 @@ npm run package      # Native release with bundled gh and license notices
 
 Root installation enables Git hooks: pre-commit formats staged files and checks TS/JS plus frontend tests; pre-push runs the complete validation. The project also includes editor format-on-save settings and a Codex Stop hook for automatic formatting. Review and trust that hook through `/hooks` before its first execution; see [tooling](docs/agents/tooling.md).
 
-GitHub Actions runs the complete checks for branch pushes and pull requests on Apple Silicon and Intel macOS. Pushing a version tag such as `v0.1.0` runs the checks again, packages both architectures, and uploads archives and SHA-256 files to GitHub Releases. The tag must match the package version in `Cargo.toml`. See [release instructions](docs/development.md#continuous-integration-and-releases).
+GitHub Actions runs the complete checks for pull requests on Apple Silicon macOS. Pushing a version tag such as `v0.1.0` runs the checks again, packages arm64, and uploads the archive and SHA-256 file to GitHub Releases. The tag must match the package version in `Cargo.toml`. See [release instructions](docs/development.md#continuous-integration-and-releases).
 
 ## Source layout
 

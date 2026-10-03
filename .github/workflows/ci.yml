@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: ['**']
   pull_request:
 
 permissions:
@@ -17,17 +15,9 @@ env:
 
 jobs:
   check:
-    name: Check (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    name: Check (arm64)
+    runs-on: macos-15
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            arch: arm64
-          - runner: macos-15-intel
-            arch: x64
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

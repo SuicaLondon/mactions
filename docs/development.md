@@ -43,9 +43,9 @@ Import/migration, pre-login startup, multi-user web authentication/roles, cache 
 
 ## Continuous integration and releases
 
-`.github/workflows/ci.yml` runs `npm run check:all` for branch pushes and pull requests on `macos-15` (Apple Silicon) and `macos-15-intel` (Intel). This includes lint and lint-rule tests, formatting, TypeScript checks, the frontend build and tests, and Rust formatting, Clippy, and tests. Both jobs use Node.js 24 and stable Rust.
+`.github/workflows/ci.yml` runs `npm run check:all` only for pull requests on `macos-15` (Apple Silicon). This includes lint and lint-rule tests, formatting, TypeScript checks, the frontend build and tests, and Rust formatting, Clippy, and tests. The job uses Node.js 24 and stable Rust.
 
-`.github/workflows/release.yml` runs when a `v*` tag is pushed. The tag must exactly match `v` followed by the package version in `Cargo.toml`. Each architecture runs the complete checks before packaging. GitHub Releases receives both `.tar.gz` archives and their `.sha256` files only after both builds succeed. Versions with a prerelease suffix are published as prereleases. A rerun uploads the files to an existing release and publishes it if necessary.
+`.github/workflows/release.yml` runs when a `v*` tag is pushed. The tag must exactly match `v` followed by the package version in `Cargo.toml`. The Apple Silicon build job runs the complete checks before packaging. GitHub Releases receives the arm64 `.tar.gz` archive and its `.sha256` file only after the build succeeds. Versions with a prerelease suffix are published as prereleases. A rerun uploads the files to an existing release and publishes it if necessary.
 
 To publish the current version from the intended release commit:
 
@@ -56,7 +56,7 @@ git push origin v0.1.0
 
 For subsequent releases, update the package version in `Cargo.toml`, refresh `Cargo.lock` with Cargo, and commit the changes before creating the corresponding tag. Bundle filenames read the Cargo package version automatically. Download the archive and its checksum into the same directory and verify with `shasum -a 256 -c mactions-0.1.0-macos-arm64.tar.gz.sha256` before extraction.
 
-The workflow uses GitHub's automatic `GITHUB_TOKEN`; no personal token or signing secret is required. Build jobs have read-only repository permissions, and only the publishing job can write release contents. Releases remain unsigned and unnotarized.
+The workflow uses GitHub's automatic `GITHUB_TOKEN`; no personal token or signing secret is required. The build job has read-only repository permissions, and only the publishing job can write release contents. Releases remain unsigned and unnotarized.
 
 ## Development-only CI recordings
 
