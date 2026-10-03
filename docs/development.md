@@ -45,18 +45,33 @@ Import/migration, pre-login startup, multi-user web authentication/roles, cache 
 
 `.github/workflows/ci.yml` runs `npm run check:all` only for pull requests on `macos-15` (Apple Silicon). This includes lint and lint-rule tests, formatting, TypeScript checks, the frontend build and tests, and Rust formatting, Clippy, and tests. The job uses Node.js 24 and stable Rust.
 
-`.github/workflows/release.yml` runs when a `v*` tag is pushed. The tag must exactly match `v` followed by the package version in `Cargo.toml`. The Apple Silicon build job runs the complete checks before packaging. GitHub Releases receives the arm64 `.tar.gz` archive and its `.sha256` file only after the build succeeds. Versions with a prerelease suffix are published as prereleases. A rerun uploads the files to an existing release and publishes it if necessary.
+`.github/workflows/release.yml` runs when a `v*` tag is pushed. The tag must exactly match `v` followed by the package version in `Cargo.toml`. The Apple Silicon build job runs the complete checks before packaging, signing, and notarizing. GitHub Releases receives the arm64 `.tar.gz` archive and its `.sha256` file only after Apple returns an `Accepted` notarization status. Versions with a prerelease suffix are published as prereleases. A rerun uploads the files to an existing release and publishes it if necessary.
 
-To publish the current version from the intended release commit:
+Configure these repository secrets under **Settings → Secrets and variables → Actions** before publishing:
+
+| Secret                         | Value                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE_P12_BASE64` | Base64-encoded `.p12` containing a valid Developer ID Application certificate and its private key.            |
+| `APPLE_CERTIFICATE_PASSWORD`   | The password used when exporting the `.p12` file.                                                             |
+| `APPLE_ID`                     | The Apple account email used for notarization.                                                                |
+| `APPLE_TEAM_ID`                | The developer team ID matching the Developer ID Application certificate.                                      |
+| `APPLE_APP_SPECIFIC_PASSWORD`  | An app-specific password generated for that Apple account at [account.apple.com](https://account.apple.com/). |
+
+The release step trims leading and trailing whitespace from all five Apple secrets before using them. The workflow imports the certificate into a temporary keychain and signs `mactions` with the hardened runtime and a secure timestamp. It preserves and verifies the bundled GitHub CLI's upstream signature. A temporary ZIP is submitted with `notarytool`; after acceptance, the workflow regenerates the `.tar.gz` and its checksum from the signed bundle. The temporary keychain and certificate file are always removed and are never included in the bundle. No private key or password should be committed to the repository.
+
+Command-line binaries cannot have a notarization ticket stapled to them. The first Gatekeeper verification therefore requires an internet connection. Local `npm run package` output remains unsigned. The workflow's first signed release still needs to be verified in GitHub Actions.
+
+The current package version is `0.1.0`; after the old tag and release are removed, `v0.1.0` can be recreated from the commit containing this release workflow. For later releases, update the package version in `Cargo.toml`, refresh `Cargo.lock` with Cargo, and commit the changes. Merge the release workflow and any version changes into `main`, then check out the latest `main`. Replace `X.Y.Z` below with the package version and create a new, unused tag from the intended release commit:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+version=X.Y.Z
+git tag "v$version"
+git push origin "v$version"
 ```
 
-For subsequent releases, update the package version in `Cargo.toml`, refresh `Cargo.lock` with Cargo, and commit the changes before creating the corresponding tag. Bundle filenames read the Cargo package version automatically. Download the archive and its checksum into the same directory and verify with `shasum -a 256 -c mactions-0.1.0-macos-arm64.tar.gz.sha256` before extraction.
+Bundle filenames read the Cargo package version automatically. Download the archive and its checksum into the same directory and verify with `shasum -a 256 -c "mactions-$version-macos-arm64.tar.gz.sha256"` before extraction.
 
-The workflow uses GitHub's automatic `GITHUB_TOKEN`; no personal token or signing secret is required. The build job has read-only repository permissions, and only the publishing job can write release contents. Releases remain unsigned and unnotarized.
+The workflow uses GitHub's automatic `GITHUB_TOKEN` to publish; no personal GitHub token is required. Apple secrets are available only to the signing and notarization step. The build job has read-only repository permissions, and only the publishing job can write release contents.
 
 ## Development-only CI recordings
 

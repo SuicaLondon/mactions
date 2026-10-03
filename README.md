@@ -15,7 +15,7 @@ Open <http://localhost:8787>. If GitHub authentication is missing, choose **Conn
 
 `./mactions serve` listens on `0.0.0.0:8787`, allowing LAN access. There is no application login: anyone who can reach the service can manage runners with the host account's permissions. Use the loopback bind above for access from this Mac only. Run as the owning macOS user, without `sudo`.
 
-The current development release targets Apple Silicon and is not Developer ID signed or notarized. Native Intel packaging is supported by the script but remains untested.
+Release builds target Apple Silicon. The tag release workflow signs and notarizes releases using the configured Apple credentials; local packages remain unsigned. Initial macOS Gatekeeper verification of the command-line release requires an internet connection.
 
 ## Manage runners
 
@@ -52,12 +52,12 @@ npm run format       # ESLint fixes, Prettier, and rustfmt
 npm run check        # Lint, formatting, and strict TypeScript checks
 npm test             # Frontend interaction and model tests
 npm run check:all    # Build, frontend tests, Rust formatting/Clippy/tests
-npm run package      # Native release with bundled gh and license notices
+npm run package      # Unsigned local release with bundled gh and license notices
 ```
 
 Root installation enables Git hooks: pre-commit formats staged files and checks TS/JS plus frontend tests; pre-push runs the complete validation. The project also includes editor format-on-save settings and a Codex Stop hook for automatic formatting. Review and trust that hook through `/hooks` before its first execution; see [tooling](docs/agents/tooling.md).
 
-GitHub Actions runs the complete checks for pull requests on Apple Silicon macOS. Pushing a version tag such as `v0.1.0` runs the checks again, packages arm64, and uploads the archive and SHA-256 file to GitHub Releases. The tag must match the package version in `Cargo.toml`. See [release instructions](docs/development.md#continuous-integration-and-releases).
+GitHub Actions runs the complete checks for pull requests on Apple Silicon macOS. Pushing a new version tag such as `vX.Y.Z` runs the checks again, packages arm64, signs and notarizes the release, and uploads the archive and SHA-256 file to GitHub Releases. The tag must match the package version in `Cargo.toml`. See [release instructions](docs/development.md#continuous-integration-and-releases) for the required Apple secrets.
 
 ## Source layout
 
