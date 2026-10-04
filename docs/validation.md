@@ -23,7 +23,7 @@ npm run test:homebrew
 cargo test installation::
 ```
 
-The installer check uses an isolated temporary HOME, locally generated archive/checksum fixtures, and fake manager commands. It covers installer flags, PATH/service command dispatch, archive integrity, unsafe archive paths/links, and conflicting installation ownership. It makes no real GitHub request and installs no real launchd service. The Homebrew checks validate compatibility manifests, final archive checksums, generated formula behavior, and Ruby syntax; they do not install a tap or run `brew services`.
+The installer check uses an isolated temporary HOME, locally generated archive/checksum fixtures, and fake manager commands. It covers installer flags, PATH/service command dispatch, archive integrity, unsafe archive paths/links, and conflicting installation ownership. It makes no real GitHub request and installs no real launchd service. The Homebrew checks validate compatibility manifests, final archive checksums, licensed source archives, generated formula behavior, and Ruby syntax; they do not install a tap or run `brew services`.
 
 Rust installation tests cover local-default settings, owned service/source validation, stable-release and checksum parsing, archive safety, operation locks, persistent update status, activation, and rollback. Their service/activation fixtures do not establish successful real login, reboot, or network authorization. See the remaining native checks below.
 
@@ -37,6 +37,16 @@ npm run test:manager -- dist/mactions-0.2.0-macos-arm64.tar.gz
 ```
 
 This requires an Apple Silicon Mac with a current GUI login session and refuses to run when port 8787 is occupied. It installs the offline archive into a temporary HOME, uses a unique data directory/launchd label, checks actual manager service and network-setting restarts through version/data-directory/PID health, and verifies that uninstall preserves data and fixture credentials. It registers no real runner and makes no GitHub request. Cleanup removes its service and temporary files; launchd may retain an enabled override for the unique, now-absent label. The test is separate from `check:all`; it does not establish reboot/login or fresh-Mac Gatekeeper behavior.
+
+## Homebrew source formula checks
+
+[Homebrew core preparation](homebrew-core.md) documents a separate real source installation into a temporary local tap, followed by `brew test --force`, `brew audit --strict`, and `brew style`. Homebrew resolves Rust/Node build dependencies and the external `gh` runtime dependency. Language dependencies use their lockfiles in the fetch phase; compilation runs offline. The source formula does not bundle or replace `gh`.
+
+The installed formula's functional test uses an isolated HOME/data directory and an unused loopback port. It verifies the offline runner list, HTTP version/data-directory/PID health, and embedded HTML/JavaScript/CSS, then terminates the manager. It starts no login service, registers no real runner, and makes no GitHub request. The generator's fixture tests and this installed functional test are different checks; only executing the Homebrew commands establishes the latter result.
+
+The pull-request CI workflow adds the native source install, functional test, style check, and strict audit after `npm run check:all` on macOS 15. It uses an archive of the checked-out commit, a unique temporary tap, normal dependency resolution, isolated cache/trust, and `--skip-link`; its exit handler cleans the test keg and tap without automatic dependency removal. Local `check:all` covers generator fixtures, not this native installation. The new CI step's result must be checked against the relevant commit before reporting success.
+
+A local archive and temporary-tap audit validate the checkout's implementation. They do not establish official acceptance. Some audits apply only in `homebrew/core`; full `--new --online` validation against a public licensed release remains pending, together with public-interest/repository-age gates, the supported-platform CI matrix, and maintainer review. No new public version or official submission is part of this preparation.
 
 ## Native integration smoke test
 

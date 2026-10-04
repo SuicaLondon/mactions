@@ -41,3 +41,37 @@ jobs:
           npm --prefix web ci
       - name: Lint, build, and test
         run: npm run check:all
+      - name: Validate Homebrew source installation
+        run: |
+          set -euo pipefail
+          validation_dir="$RUNNER_TEMP/mactions-homebrew-source"
+          validation_tap="suicalondon/mactions-validation-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export HOMEBREW_CACHE="$validation_dir/cache"
+          export HOMEBREW_TEMP="$validation_dir/tmp"
+          export HOMEBREW_XDG_CONFIG_HOME="$validation_dir/config"
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_NO_INSTALL_CLEANUP=1
+          export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+          mkdir -p "$validation_dir" "$HOMEBREW_CACHE" "$HOMEBREW_TEMP"
+          cleanup() {
+            HOMEBREW_NO_AUTOREMOVE=1 brew uninstall "$validation_tap/mactions" 2>/dev/null || true
+            brew untap "$validation_tap" 2>/dev/null || true
+            rm -rf -- "$validation_dir"
+          }
+          trap cleanup EXIT
+          archive="$validation_dir/mactions-source.tar.gz"
+          git archive --format=tar --prefix=mactions-source/ HEAD | gzip -n > "$archive"
+          brew tap-new --no-git "$validation_tap"
+          formula="$(brew --repository "$validation_tap")/Formula/mactions.rb"
+          npm run homebrew:source -- "$archive" "file://$archive" "$formula"
+          brew trust --formula "$validation_tap/mactions"
+          brew style --formula "$validation_tap/mactions"
+          # Remove only the image's legacy OpenSSL command link before dependency upgrades.
+          brew_prefix="$(brew --prefix)"
+          openssl_link="$brew_prefix/bin/openssl"
+          if [ -L "$openssl_link" ] && [ "$(readlink "$openssl_link")" = "$brew_prefix/opt/openssl@1.1/bin/openssl" ]; then
+            rm "$openssl_link"
+          fi
+          brew install --formula --yes --build-from-source --skip-link "$validation_tap/mactions"
+          brew test --force "$validation_tap/mactions"
+          brew audit --strict "$validation_tap/mactions"
