@@ -147,6 +147,8 @@ jobs:
         run: |
           ./dist/mactions-*-macos-arm64/mactions --version
           ./dist/mactions-*-macos-arm64/libexec/gh --version
+      - name: Generate Homebrew formula from the signed archive
+        run: npm run homebrew
       - name: Upload release files
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -154,6 +156,8 @@ jobs:
           path: |
             dist/mactions-*-macos-arm64.tar.gz
             dist/mactions-*-macos-arm64.tar.gz.sha256
+            dist/install.sh
+            dist/homebrew/Formula/mactions.rb
           if-no-files-found: error
           retention-days: 7
 
@@ -176,7 +180,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release/*.tar.gz release/*.sha256 \
+            gh release upload "$RELEASE_TAG" release/*.tar.gz release/*.sha256 release/install.sh release/homebrew/Formula/mactions.rb \
               --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
           else
@@ -184,7 +188,7 @@ jobs:
             if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
               release_options+=(--prerelease)
             fi
-            gh release create "$RELEASE_TAG" release/*.tar.gz release/*.sha256 \
+            gh release create "$RELEASE_TAG" release/*.tar.gz release/*.sha256 release/install.sh release/homebrew/Formula/mactions.rb \
               --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes \
               --title "$RELEASE_TAG" "${release_options[@]}"
           fi

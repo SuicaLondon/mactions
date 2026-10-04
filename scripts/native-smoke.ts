@@ -28,9 +28,9 @@ assert(
   'The fixture shebang requires a Node.js path without whitespace',
 );
 const execute = promisify(execFile);
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mactions-native-smoke-'));
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mactions-native-smoke-')));
 const home = path.join(root, 'home');
-const managed = path.join(root, 'managed data');
+const managed = path.join(root, 'managed-data');
 const app = path.join(root, 'app');
 const packageRoot = path.join(root, 'package');
 const label = `actions.runner.mactions-smoke.${randomUUID().replaceAll('-', '').slice(0, 12)}`;

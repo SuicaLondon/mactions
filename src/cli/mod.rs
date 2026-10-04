@@ -2,6 +2,7 @@ use anyhow::{bail, Context, Result};
 use mactions::{
     core::{Create, Manager},
     github,
+    installation::{self, config, service, uninstall, update},
     native::{default_root, find_gh, Native},
     web,
 };
@@ -11,7 +12,29 @@ use std::{
     sync::Arc,
 };
 
-const HELP: &str = "mactions — GitHub Actions runners on your Mac\n\nUsage: mactions [--data-dir PATH] COMMAND\n\n  create repo OWNER/REPO [--prefix NAME] [--labels a,b] [--registration-token TOKEN | --registration-token-stdin]\n  create org ORGANIZATION [--prefix NAME] [--labels a,b] [--registration-token TOKEN | --registration-token-stdin]\n  list [--local]                 Show runners; --local skips GitHub\n  show ID                       Show one managed runner\n  start ID | stop ID | restart ID\n  labels ID a,b                  Replace custom labels (use '' to clear)\n  delete ID --yes                Stop, deregister, then remove owned files\n  retry ID [--registration-token TOKEN]  Resume incomplete creation\n  serve [--bind ADDRESS:PORT]    Web UI; default 0.0.0.0:8787 (LAN)\n  auth login | auth status      Use the host user's GitHub authentication\n  help | --version\n\nStopping the web server does not stop runners.\nWeb mode has no login: everyone who can reach it can manage your runners.\n";
+const HELP: &str = r#"mactions — GitHub Actions runners on your Mac
+
+Usage: mactions [--data-dir PATH] COMMAND
+
+  open                          Start the dashboard if needed and open it
+  service install | start | stop | restart | status
+  update [--check]               Update the manager using its installation source
+  uninstall                     Remove the manager; preserve runners and data
+  create repo OWNER/REPO [--prefix NAME] [--labels a,b] [--registration-token TOKEN | --registration-token-stdin]
+  create org ORGANIZATION [--prefix NAME] [--labels a,b] [--registration-token TOKEN | --registration-token-stdin]
+  list [--local]                 Show runners; --local skips GitHub
+  show ID                       Show one managed runner
+  start ID | stop ID | restart ID
+  labels ID a,b                  Replace custom labels (use '' to clear)
+  delete ID --yes                Stop, deregister, then remove owned files
+  retry ID [--registration-token TOKEN]  Resume incomplete creation
+  serve [--bind ADDRESS:PORT]    Dashboard; saved network setting, local-only by default
+  auth login | auth status      Use the host user's GitHub authentication
+  help | --version
+
+Stopping the dashboard does not stop runners.
+LAN access has no login: reachable devices can manage your runners.
+"#;
 
 pub fn run() -> Result<()> {
     let mut args: Vec<_> = std::env::args().skip(1).collect();
@@ -57,6 +80,10 @@ pub fn run() -> Result<()> {
     std::fs::create_dir_all(&root)?;
     let root = root.canonicalize()?;
     let manager = Arc::new(Manager::new(root.clone(), Arc::new(Native { root, gh }))?);
+    if let Some(output) = installation_command(command, &args, &manager.root)? {
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        return Ok(());
+    }
     let output = match command {
         "create" => {
             let kind = args
@@ -127,15 +154,15 @@ pub fn run() -> Result<()> {
         }
         "serve" => {
             let bind = if args.len() == 1 {
-                "0.0.0.0:8787"
+                config::address(&manager.root)?
             } else {
                 anyhow::ensure!(
                     args.len() == 3 && args[1] == "--bind",
                     "Use serve [--bind ADDRESS:PORT]"
                 );
-                &args[2]
+                args[2].clone()
             };
-            return web::serve(manager, bind);
+            return web::serve(manager, &bind);
         }
         "start" | "stop" | "restart" | "delete" | "retry" | "labels" => {
             let id = args.get(1).context("Specify a runner ID")?.parse()?;
@@ -218,4 +245,71 @@ fn prompt(label: &str, secret: bool) -> Result<String> {
     let value = value.trim().to_string();
     anyhow::ensure!(!value.is_empty(), "{label} is required");
     Ok(value)
+}
+
+fn installation_command(
+    command: &str,
+    args: &[String],
+    root: &std::path::Path,
+) -> Result<Option<serde_json::Value>> {
+    let result = match command {
+        "open" => {
+            anyhow::ensure!(args.len() == 1, "Use mactions open");
+            let _guard = installation::operation_guard(root)?;
+            service::open(root)?
+        }
+        "service" => {
+            anyhow::ensure!(
+                args.len() == 2,
+                "Use service install|start|stop|restart|status"
+            );
+            if args[1] == "status" {
+                return Ok(Some(service::status(root)?));
+            }
+            let _guard = installation::operation_guard(root)?;
+            match args[1].as_str() {
+                "install" => service::install(root)?,
+                "start" => service::start(root)?,
+                "stop" => service::stop(root)?,
+                "restart" => service::restart(root)?,
+                _ => bail!("Use service install|start|stop|restart|status"),
+            }
+        }
+        "update" => {
+            if args.len() == 2 && args[1] == "--check" {
+                return Ok(Some(update::check(root)?));
+            }
+            anyhow::ensure!(args.len() == 1, "Use update [--check]");
+            update::run(root)?
+        }
+        "uninstall" => {
+            anyhow::ensure!(args.len() == 1, "Use mactions uninstall");
+            let _guard = installation::operation_guard(root)?;
+            uninstall::run(root)?
+        }
+        "_update" => {
+            anyhow::ensure!(args.len() == 1, "Invalid update helper arguments");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            update::run(root)?
+        }
+        "_service-restart" => {
+            anyhow::ensure!(args.len() == 1, "Invalid service helper arguments");
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let started = std::time::Instant::now();
+            let _guard = loop {
+                match installation::operation_guard(root) {
+                    Ok(guard) => break guard,
+                    Err(error) => {
+                        if started.elapsed() >= std::time::Duration::from_secs(300) {
+                            return Err(error);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(250));
+                    }
+                }
+            };
+            service::restart(root)?
+        }
+        _ => return Ok(None),
+    };
+    Ok(Some(result))
 }

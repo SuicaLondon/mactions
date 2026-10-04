@@ -27,6 +27,9 @@ pub(super) fn route(
     if request.method() == &Method::Get {
         let scope = || Scope::new(param("organization"), param("repository"));
         let page = || param("page").unwrap_or("1").parse::<u64>();
+        if let Some(result) = super::manager::get(path, &manager.root)? {
+            return Ok((200, "application/json; charset=utf-8", result.to_string()));
+        }
         let result = match path {
             "/api/runners" => manager.list(param("local") != Some("1"))?,
             "/api/github/connection" => github::connection(manager),
@@ -164,6 +167,9 @@ pub(super) fn route(
     request.as_reader().take(16385).read_to_end(&mut bytes)?;
     ensure!(bytes.len() <= 16384, "Request body is too large");
     let payload: Value = serde_json::from_slice(&bytes)?;
+    if let Some(result) = super::manager::post(path, &payload, &manager.root)? {
+        return Ok((200, "application/json; charset=utf-8", result.to_string()));
+    }
     let result = if path == "/api/github/auth" {
         auth.start(
             manager,

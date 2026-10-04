@@ -25,6 +25,8 @@ web/src/
       shared/           components/, models/
     github/             components/{connection,authorization,status,scope,targets}/
                         hooks/{connection,authorization,targets}/, models/
+    manager/            Settings, network access, version checks, update progress
+                        components/, hooks/, types/
     replay/             components/{player,graph}/, hooks/, models/recording/, types/
   shared/
     api/                HTTP client, wire types, and query configuration
@@ -107,8 +109,14 @@ src/
     service.rs          launchd and runner service inspection
     backend.rs          Backend implementation
     tests.rs
+  installation/
+    config.rs           Saved manager network settings
+    service.rs          Owned manager login service and installation source
+    update.rs           Verified manager updates, activation, rollback, status
+    uninstall.rs        Manager-only removal that preserves runners and data
   web/
     mod.rs              HTTP server and embedded assets
+    manager.rs          Settings, health, and detached manager operations
     routes.rs           Request routing and response mapping
     tests.rs
 ```
@@ -116,6 +124,10 @@ src/
 Existing public module paths remain stable through explicit exports from each `mod.rs`. Internal helpers stay private or visible only to their parent module. The web layer maps requests onto operations; it does not duplicate runner lifecycle rules. The native backend owns operating-system and subprocess details behind the existing `Backend` contract.
 
 There is no new database, background polling service, dependency injection framework, or generic repository layer. `core` separates data, adapter contracts, and orchestration; `logs.rs` remains a cohesive module for bounded local file reads.
+
+`installation` owns manager configuration and distribution independently of runner lifecycle. Script installations use a stable `current/mactions` entrypoint under `~/.local/share/mactions`; updates stage and verify an entire bundle before an atomic link switch. Failed startup restores the prior release. Homebrew sources delegate file ownership and service commands to Homebrew. The manager's operation lock prevents its update or restart from interrupting pending runner mutations.
+
+Manager settings default to loopback access and are saved under the selected data directory. Web mutations launch a detached CLI helper for restarts and updates so the request can finish before the serving process exits. The updater persists progress and errors, and the UI reconnects only after the new manager reports its version and data directory. Runner services remain separate launchd jobs throughout these operations.
 
 ## Validation and development
 
