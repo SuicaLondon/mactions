@@ -35,6 +35,12 @@ Manage self-hosted GitHub Actions runners on macOS and inspect workflow activity
 ## Access and Usage
 
 - Minimize manual installation prerequisites: distribute a prebuilt Rust application with web assets and a bundled GitHub CLI, and download the official runner when creating one. Users do not need to install Rust or a separate web runtime; workflow-specific build tools remain separate prerequisites.
+- Target Apple Silicon Macs running macOS 12 or later for the current distribution. Keep Intel support outside this installation release.
+- Provide a SHA-256-verified installer for the current account without sudo, an optional Homebrew tap, and a downloaded-archive path. Register the manager for login startup, start it immediately when a GUI login session is available, and open the dashboard unless disabled by an installer option.
+- Start the manager and previously enabled runners after the owning account logs in. Preserve manually stopped runner and manager states across updates and reboots until explicitly started again. Defer startup before login and setup for other accounts to [issue #3](https://github.com/SuicaLondon/mactions/issues/3).
+- Provide manager open, install/start/stop/restart/status, manual update/check, and uninstall commands. Use Homebrew for lifecycle, updates, and removal of Homebrew installations.
+- Offer manual updates from the dashboard and CLI. Verify script updates before activation, retain the prior release, and restore it when the updated manager fails its startup health check. Preserve runners and active jobs through manager updates or restarts.
+- Uninstall only the manager's owned installation and service. Preserve runner installations, services, data, and GitHub credentials.
 - Deliver standalone CLI and web management together in the same first iteration, sharing runner-management logic and behavior.
 - Use GitHub CLI (`gh`) authentication for the first release. CLI and web operations use the GitHub credentials available to the local macOS account running mactions.
 - Reuse existing valid `gh` authentication and respect its configured credential location, including when using a bundled executable. Request login only when needed, and distinguish missing GitHub permissions from missing authentication.
@@ -43,9 +49,9 @@ Manage self-hosted GitHub Actions runners on macOS and inspect workflow activity
 - Search loaded repository/organization choices with pagination and accept pasted GitHub URLs. Preserve forms during SSO and organization approval; provide actionable links and a recheck action. Distinguish confirmed read capabilities from unconfirmed write permission.
 - Generate default runner names and immediately start successful installations. Keep name prefix and custom labels in advanced settings.
 - Support standalone command-line runner CRUD without starting the web service or requiring it to be running.
-- Support runner CRUD through an explicitly started, locally hosted web UI.
+- Support runner CRUD through a locally hosted web UI, started manually or by the owning account's login service.
 - Stopping the web service leaves running runners and their jobs running.
-- Allow access to the web UI from both the local Mac and other devices on the local network by default.
+- Default web access to the local Mac. Offer an explicit LAN access setting; saving restarts only the managed dashboard. Manual `serve --bind` overrides the saved setting for that process.
 - The first release assumes one operator, with no mactions login, shared access token, or roles. It has no web login or application-level access control. Anyone who can reach the web service has full runner-management permissions, using the host's GitHub authentication.
 - Prioritize low RAM overhead for the running web service, including any future workflow status and log watching. Standalone command-line operations are not the focus of this RAM optimization requirement.
 - Design for Macs with 8 GB of RAM. Prioritize low resident memory overhead for mactions when choosing the implementation, while keeping the first release simple.
@@ -54,7 +60,7 @@ Manage self-hosted GitHub Actions runners on macOS and inspect workflow activity
 
 ## Later: Startup Before Login
 
-- Consider running enabled runners after a Mac reboot before a user logs in, if unattended operation becomes necessary.
+- Consider running the manager and enabled runners after a Mac reboot before a user logs in, if unattended operation becomes necessary. Track this and installation for other accounts in [issue #3](https://github.com/SuicaLondon/mactions/issues/3).
 
 ## Later: Web Access Control
 

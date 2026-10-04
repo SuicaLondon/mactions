@@ -1,4 +1,5 @@
 //! Embedded frontend serving and the local HTTP API.
+mod manager;
 mod routes;
 
 use crate::{core::Manager, github::Auth};

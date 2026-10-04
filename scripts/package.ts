@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { bundlePath, repo } from './shared/paths.ts';
+import { bundlePath, packageVersion, repo } from './shared/paths.ts';
 
 const ghVersion = '2.96.0';
 let ghArch = 'amd64';
@@ -88,6 +88,25 @@ function copyDocumentation() {
   }
 }
 
+function writeManifest() {
+  for (const executable of ['mactions', 'libexec/gh']) {
+    const metadata = execFileSync('/usr/bin/otool', ['-l', path.join(bundle, executable)], {
+      encoding: 'utf8',
+    });
+    const minimum = metadata.match(/\bminos\s+(\d+)\.(\d+)/);
+    if (
+      !minimum ||
+      Number(minimum[1]) > 12 ||
+      (Number(minimum[1]) === 12 && Number(minimum[2]) > 0)
+    )
+      throw new Error(`${executable} is incompatible with macOS 12.0`);
+  }
+  fs.writeFileSync(
+    path.join(bundle, 'manifest.json'),
+    `${JSON.stringify({ version: packageVersion(), arch: process.arch, min_macos: 12 }, null, 2)}\n`,
+  );
+}
+
 function main() {
   buildRelease();
   fs.rmSync(bundle, { recursive: true, force: true });
@@ -107,9 +126,11 @@ function main() {
     }
     fs.copyFileSync(path.join(ghRoot, 'LICENSE'), path.join(bundle, 'licenses/GitHub-CLI-LICENSE'));
     copyDocumentation();
+    writeManifest();
     const release = `${bundle}.tar.gz`;
     run('/usr/bin/tar', ['-czf', release, '-C', path.dirname(bundle), path.basename(bundle)]);
     fs.writeFileSync(`${release}.sha256`, `${checksum(release)}  ${path.basename(release)}\n`);
+    fs.copyFileSync(path.join(repo, 'install.sh'), path.join(repo, 'dist/install.sh'));
     console.log(`Created ${path.relative(repo, release)}`);
   } finally {
     fs.rmSync(stage, { recursive: true, force: true });

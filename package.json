@@ -9,6 +9,10 @@
     "dev": "node --experimental-strip-types scripts/dev.ts",
     "typecheck": "npm --prefix web run typecheck",
     "package": "node --experimental-strip-types scripts/package.ts",
+    "homebrew": "node --experimental-strip-types scripts/homebrew.ts",
+    "test:install": "node --experimental-strip-types scripts/install-smoke.ts",
+    "test:homebrew": "node --experimental-strip-types --test scripts/homebrew.test.ts",
+    "test:manager": "node --experimental-strip-types scripts/manager-smoke.ts",
     "smoke": "node --experimental-strip-types scripts/native-smoke.ts",
     "memory": "node --experimental-strip-types scripts/measure-memory.ts",
     "prepare": "husky",
@@ -17,7 +21,7 @@
     "format": "npm --prefix web run format && cargo fmt --all",
     "format:check": "npm --prefix web run format:check && cargo fmt --all -- --check",
     "check": "npm --prefix web run check",
-    "check:all": "npm --prefix web run check:all",
+    "check:all": "npm --prefix web run check:all && npm run test:install && npm run test:homebrew",
     "test": "npm --prefix web test"
   },
   "devDependencies": {

@@ -1,6 +1,77 @@
 # User guide
 
-A small native manager for self-hosted GitHub Actions runners on macOS, with on-demand GitHub workflow activity and job history. Use the CLI directly, or start the embedded web UI when you need it. Both use the same management core.
+A small native manager for self-hosted GitHub Actions runners on macOS, with on-demand GitHub workflow activity and job history. Use the CLI directly or the embedded web UI. Both use the same management core.
+
+## Install for your account
+
+The distribution targets Apple Silicon and macOS 12 or later. Use a `v0.2.0` or later release for the installer command; Homebrew additionally requires its separate tap. These entry points are not available in the older `v0.1.0` release. Native macOS 12, fresh-Mac, and reboot validation remains listed in [validation](validation.md).
+
+```sh
+curl -fsSL https://github.com/SuicaLondon/mactions/releases/latest/download/install.sh | sh
+```
+
+Run as your current macOS account, without `sudo`. The installer downloads a stable release, verifies SHA-256 and the compatibility manifest, retains the bundled GitHub CLI, installs a command in `~/.local/bin`, and adds that directory to the supported shell configuration. It registers the manager's login service, starts it when a GUI login session is available, and opens the dashboard. Over SSH without a GUI login session, the service starts at the next login. First-time GitHub authorization and runner registration remain separate steps.
+
+Download the installer to pass options or inspect it first:
+
+```sh
+curl -fsSL https://github.com/SuicaLondon/mactions/releases/latest/download/install.sh -o install.sh
+sh install.sh --no-open
+```
+
+| Option                  | Behavior                                                                   |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `--no-open`             | Install and start without opening a browser.                               |
+| `--no-start`            | Install and register the login service without starting or opening it now. |
+| `--version X.Y.Z`       | Select a stable release for a new installation.                            |
+| `--archive FILE.tar.gz` | Install a downloaded bundle using its adjacent `FILE.tar.gz.sha256`.       |
+
+The installer keeps application releases under `~/.local/share/mactions/releases/VERSION`, with `current` and, after an update, `previous` links. Runner data remains in `~/.mactions`. It refuses conflicting manual or Homebrew installations. Rerunning the default installer for an owned installation delegates to `mactions update`; explicit archive/version options do not replace an existing managed installation.
+
+Homebrew installation, after the tap is published:
+
+```sh
+brew install SuicaLondon/tap/mactions
+brew services start mactions
+mactions open
+```
+
+Installing the formula alone does not start the service. `brew services start` starts it now and at login for the current account. Use the installer on macOS 12–14; those versions are outside [Homebrew's supported macOS versions](https://docs.brew.sh/Installation#macos-requirements). Homebrew manager services use the default `~/.mactions` data directory.
+
+## Manager service and network access
+
+```sh
+mactions open
+mactions service install
+mactions service start
+mactions service stop
+mactions service restart
+mactions service status
+```
+
+`open` starts the manager if needed and opens its local dashboard. `service install` registers the service; `start` enables it and starts it when a login session is available. `stop` stops the manager and disables its login startup until explicitly started again. Homebrew installations delegate lifecycle commands to `brew services`. These commands control only the manager: runners and active jobs remain independent.
+
+Automatic startup begins when the owning account logs in. Enabled runners retain their own login services and start independently of the dashboard; manually stopped runners stay stopped. Startup before login and setup for another account are deferred to [issue #3](https://github.com/SuicaLondon/mactions/issues/3).
+
+The dashboard uses `http://localhost:8787` and defaults to local access through `127.0.0.1:8787`. In **Settings → Network access**, enable **Allow access from other devices** to listen on `0.0.0.0:8787`. Saving a changed setting restarts the managed dashboard without stopping runners or their jobs. Turning off LAN access from another device closes that connection; reopen the dashboard on the Mac. A manually started dashboard needs a manual restart after saving.
+
+There is no mactions login or application-level access control. Every device that can reach the dashboard receives full management access using the host account's GitHub permissions.
+
+## Update and uninstall
+
+```sh
+mactions update --check
+mactions update
+mactions uninstall
+```
+
+Updates are manual. **Settings → Version and updates** shows the installed version and source, checks the latest stable release when opened, and offers an update button. The dashboard briefly disconnects while its manager service restarts, then reconnects after a health check. Update status and the helper's log remain available in Settings. Pending runner mutations block a manager update; wait for them to finish and retry.
+
+Script installations verify the new archive, its compatibility manifest, and both executables before atomically switching `current`. Only an already running manager service restarts. If the replacement manager fails its health check, the updater restores the prior release and restarts it. It keeps the previous release and preserves all runner installations, services, workspaces, logs, and GitHub credentials. The official runner continues to own its own automatic updates.
+
+Homebrew installations delegate updates to `brew upgrade mactions`, then restart an already running manager service. You can also run `brew update`, `brew upgrade mactions`, and `brew services restart mactions` yourself. A Homebrew failure is reported for retry through Homebrew; mactions does not rewrite or roll back Homebrew's files. Manual extracted bundles cannot update themselves; use the installer or Homebrew for managed updates. Browser updates require the managed dashboard opened with `mactions open`.
+
+`uninstall` removes only the manager and its owned login service, command wrapper, and installer PATH entries. Homebrew removal delegates to `brew services stop` and `brew uninstall mactions`. All runner services and data, including `~/.mactions` and GitHub credentials, remain. Delete unwanted runners through mactions before uninstalling the manager.
 
 ## Run the release bundle
 
@@ -11,11 +82,11 @@ Keep `mactions` and `libexec/gh` together after extracting the release archive. 
 ./mactions serve
 ```
 
-Open `http://localhost:8787`, or `http://<your-mac-lan-address>:8787` from another device. Web mode listens on `0.0.0.0:8787` by default. There is no application login: everyone who can reach the service can manage runners with the host user's GitHub permissions. For local-only access, use `./mactions serve --bind 127.0.0.1:8787`.
+Open `http://localhost:8787`. `serve` uses the saved network setting, defaulting to `127.0.0.1:8787`; `./mactions serve --bind ADDRESS:PORT` overrides it for that process. Keep a manually extracted bundle at a fixed path if registering it with `service install`.
 
 The bundled `gh` reuses the current macOS user's normal GitHub CLI configuration and credential storage, including `GH_CONFIG_DIR` and `XDG_CONFIG_HOME`. If authentication is missing or expired, use **Connect GitHub** in the web UI or run `./mactions auth login` on the host Mac. Browser authorization shows a device code and GitHub link: open it on your own computer or phone, including when managing this Mac through SSH, LAN, or Tailscale. No inbound GitHub callback is needed. A permission failure does not require logging in again; check repository Administration or organization Self-hosted runners permissions. Do not run the manager with `sudo`.
 
-This development release is not Developer ID signed or notarized. Downloaded copies may require approval through macOS Privacy & Security. The currently built artifact targets Apple Silicon; the packaging script also supports native Intel Mac builds, which have not yet been tested.
+Tagged release archives are Developer ID signed and notarized; initial Gatekeeper verification requires an internet connection because a notarization ticket cannot be stapled to a bare CLI. Local `npm run package` output is unsigned. The earlier `v0.1.0` signing/notarization workflow succeeded; this does not establish fresh-Mac or older-macOS validation for `v0.2.0`. Intel releases are outside the current distribution target.
 
 ## GitHub connection and Add Runner
 
@@ -67,7 +138,7 @@ Only custom labels can be edited. Names, targets, and paths are fixed after crea
 
 Local process state and GitHub state are separate. Local lifecycle checks remain available independently; the scoped activity inventory supplies GitHub connectivity, busy state, and labels to both the runner list and its open details panel. A running process is not proof that GitHub sees the runner online. `busy`, `online`, and `offline` come from GitHub. Network or permission failures are shown as unknown, not as offline. GitHub determines the final result of an interrupted job.
 
-The web UI refreshes local runner state every 15 seconds while visible and shows progress during mutations. Activity lists and the selected job refresh only while their page is visible. Larger scopes and accumulated pages refresh less frequently according to their read cost; the view shows that interval and provides manual refresh. Job details, steps, and published logs are fetched when opened; hidden or inactive views do not poll. Runner diagnostic logs refresh every 2 seconds while live updates are enabled and the log view is visible. The server has no background GitHub poller or log watcher; only an explicitly started device authorization waits in the background until completion, cancellation, or timeout. Four HTTP workers bound concurrent handling; a cross-process file lock serializes mutations. Long-running operations continue if a browser disconnects.
+The web UI refreshes local runner state every 15 seconds while visible and shows progress during mutations. Activity lists and the selected job refresh only while their page is visible. Larger scopes and accumulated pages refresh less frequently according to their read cost; the view shows that interval and provides manual refresh. Job details, steps, and published logs are fetched when opened; hidden or inactive views do not poll. Runner diagnostic logs refresh every 2 seconds while live updates are enabled and the log view is visible. The server does not poll GitHub or watch logs without viewers. Explicit device authorization and manager update/restart helpers can continue after a browser disconnects. Four HTTP workers bound concurrent handling; a cross-process file lock serializes mutations. Long-running operations continue if a browser disconnects.
 
 ## Data and recovery
 
@@ -80,6 +151,12 @@ The official service scripts use shell text substitution. To avoid corrupting th
 ```text
 mactions/
   manager.lock
+  manager.json
+  manager-logs/stdout.log
+  manager-logs/stderr.log
+  update.lock
+  update.json
+  update.log
   records/1.json
   downloads/actions-runner-osx-arm64-VERSION.tar.gz
   actions-runner-1/

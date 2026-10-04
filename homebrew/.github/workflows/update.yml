@@ -1,0 +1,47 @@
+name: Update mactions formula
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-mactions-formula
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download latest stable formula and commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_tag="$(gh release view --repo SuicaLondon/mactions --json tagName --jq .tagName)"
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected the latest stable release tag" >&2
+            exit 1
+          fi
+          download_dir="$RUNNER_TEMP/mactions-formula"
+          mkdir -p "$download_dir" Formula
+          gh release download "$release_tag" --repo SuicaLondon/mactions \
+            --pattern mactions.rb --dir "$download_dir"
+          grep -Fq "version \"${release_tag#v}\"" "$download_dir/mactions.rb"
+          grep -Fq "https://github.com/SuicaLondon/mactions/releases/download/$release_tag/" \
+            "$download_dir/mactions.rb"
+          ruby -c "$download_dir/mactions.rb"
+          install -m 644 "$download_dir/mactions.rb" Formula/mactions.rb
+          git add -- Formula/mactions.rb
+          if git diff --cached --quiet; then
+            echo "The formula already matches $release_tag"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update mactions to $release_tag"
+          git push
