@@ -30,6 +30,8 @@ Use `npm run package`, `npm run smoke -- SERVICE_TEMPLATE PLIST_TEMPLATE`, or `n
 | `package.ts`               | Build and package the native release, bundled GitHub CLI, and license notices.                                                                                     |
 | `homebrew.ts`              | Generate the separate tap's formula and exact SHA-256 from a final arm64 release archive.                                                                          |
 | `homebrew.test.ts`         | Validate generated formula contents, Ruby syntax, and rejection of incompatible archive fixtures.                                                                  |
+| `homebrew-source.ts`       | Generate a source-built core candidate from a licensed source archive, its exact URL, and SHA-256.                                                                 |
+| `homebrew-source.test.ts`  | Validate source archive requirements, source formula generation, and Ruby syntax.                                                                                  |
 | `install-smoke.ts`         | Exercise installer integrity, ownership, flags, and archive safety with isolated HOME and fake service commands.                                                   |
 | `manager-smoke.ts`         | Optionally test a packaged manager through real launchd lifecycle, network restarts, and preserving uninstall in a temporary HOME.                                 |
 | `record-ci.ts`             | Record one workflow run on a local runner, optionally rerunning it, for development playback and debugging.                                                        |
@@ -62,9 +64,11 @@ npm run test:homebrew
 
 The installer check uses archive fixtures and a fake executable, without real GitHub or launchd operations. Rust installation tests cover settings, service ownership/source detection, archive checks, update locking, and activation rollback. These checks do not establish actual logout/login, reboot, GitHub authorization, or older-macOS behavior.
 
+`npm run homebrew:source -- ARCHIVE SOURCE_URL [OUTPUT]` generates the separate source-built candidate for `homebrew/core`; its default output is `dist/homebrew-core/mactions.rb`. See [Homebrew core preparation](homebrew-core.md) for local source-install validation and the later public source URL/checksum step. The binary tap generator and release workflow remain separate.
+
 ## Continuous integration and releases
 
-`.github/workflows/ci.yml` runs `npm run check:all` only for pull requests on `macos-15` (Apple Silicon). This includes lint and lint-rule tests, formatting, TypeScript checks, the frontend build and tests, Rust formatting/Clippy/tests, and the installer/Homebrew distribution checks. The job uses Node.js 24 and stable Rust. A macOS 15 build is not evidence of native validation on macOS 12–14.
+`.github/workflows/ci.yml` runs `npm run check:all` only for pull requests on `macos-15` (Apple Silicon). This includes lint and lint-rule tests, formatting, TypeScript checks, the frontend build and tests, Rust formatting/Clippy/tests, and the installer/Homebrew distribution checks. It then generates the source formula from the checked-out commit and runs a real Homebrew source install, installed functional test, style check, and strict audit in a temporary tap, with isolated downloads/trust and cleanup. The job uses Node.js 24 and stable Rust. A macOS 15 build is not evidence of native validation on macOS 12–14, and temporary-tap checks do not replace official core acceptance audits.
 
 `.github/workflows/release.yml` runs when a `v*` tag is pushed. The tag must exactly match `v` followed by the package version in `Cargo.toml`. The Apple Silicon build job runs the complete checks before packaging, signing, and notarizing. After Apple returns `Accepted`, it regenerates the archive/checksum and derives the Homebrew formula from those final signed bytes. GitHub Releases receives the arm64 `.tar.gz`, `.sha256`, `install.sh`, and `mactions.rb` files. Versions with a prerelease suffix are published as prereleases; default installer and manager updates select stable releases. A rerun uploads the files to an existing release and publishes it if necessary.
 

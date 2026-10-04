@@ -64,6 +64,7 @@ function downloadGitHubCli(): string {
 
 function copyDocumentation() {
   const files = [
+    'LICENSE',
     'README.md',
     'docs/user-guide.md',
     'docs/development.md',

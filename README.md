@@ -93,5 +93,10 @@ See [architecture](docs/architecture.md) for the detailed layout and [AGENTS.md]
 - [User guide](docs/user-guide.md): release setup, commands, permissions, lifecycle, and recovery.
 - [Development](docs/development.md): scripts, packaging, and recording workflow executions.
 - [Validation](docs/validation.md): repeatable checks, native integration, measurements, and remaining release work.
+- [Homebrew core preparation](docs/homebrew-core.md): source formula, isolated validation, and remaining official submission requirements.
 - [Activity navigation](docs/activity-navigation.md): views, history, logs, and request limits.
 - [Domain](docs/domain.md), [product scope](docs/product-scope.md), and [Rust decision](docs/adr/0001-use-rust.md).
+
+## License
+
+mactions is licensed under the [MIT license](LICENSE). Copyright (c) 2026 SuicaLondon. Bundled dependencies retain their own licenses; release packages include their notices.

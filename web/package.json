@@ -1,11 +1,13 @@
 {
   "name": "mactions-web",
+  "license": "MIT",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "npm run check && vite build",
+    "build:assets": "vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p lint/tsconfig.json && tsc -p ../scripts/tsconfig.json",
     "lint": "node --experimental-strip-types node_modules/eslint/bin/eslint.js . ../scripts ../eslint.config.mjs ../lint-staged.config.mjs --max-warnings=0 && node --experimental-strip-types --test lint/**/*.test.ts",

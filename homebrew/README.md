@@ -2,6 +2,8 @@
 
 This directory is the template for the separate `SuicaLondon/homebrew-tap` repository. The tap has not been published by adding these files to the mactions repository.
 
+This tap installs the prebuilt release bundle. The separate [Homebrew core preparation](../docs/homebrew-core.md) provides a source-built formula with Homebrew-managed dependencies; it does not publish this tap or submit to the official repository.
+
 ## Install and start
 
 After the tap is published, install the prebuilt Apple Silicon release:

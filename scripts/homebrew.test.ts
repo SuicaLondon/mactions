@@ -32,6 +32,7 @@ test('generates a formula with the final archive checksum and bundled tools', ()
     const formula = fs.readFileSync(output, 'utf8');
     const checksum = createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
     assert.ok(formula.includes(`sha256 "${checksum}"`));
+    assert.ok(formula.includes('license "MIT"'));
     assert.ok(formula.includes('/v0.2.0/mactions-0.2.0-macos-arm64.tar.gz'));
     assert.ok(formula.includes('bin.write_exec_script libexec/"mactions"'));
     assert.ok(formula.includes('assert_path_exists libexec/"libexec/gh"'));

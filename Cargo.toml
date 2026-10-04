@@ -3,6 +3,7 @@ name = "mactions"
 version = "0.2.0"
 edition = "2021"
 description = "A small CLI and web manager for GitHub Actions runners on macOS"
+license = "MIT"
 
 [dependencies]
 anyhow = "1"

@@ -48,6 +48,7 @@ export function generateHomebrewFormula(archive: string, output = defaultOutput)
   url "https://github.com/SuicaLondon/mactions/releases/download/v${version}/mactions-${version}-macos-arm64.tar.gz"
   version "${version}"
   sha256 "${checksum}"
+  license "MIT"
 
   depends_on arch: :arm64
   depends_on macos: :monterey
