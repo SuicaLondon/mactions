@@ -66,6 +66,10 @@ jobs:
           npm run homebrew:source -- "$archive" "file://$archive" "$formula"
           brew trust --formula "$validation_tap/mactions"
           brew style --formula "$validation_tap/mactions"
+          # The runner image links OpenSSL 1.1, which conflicts with current dependencies.
+          if brew list --versions openssl@1.1 >/dev/null 2>&1; then
+            brew unlink openssl@1.1
+          fi
           brew install --formula --yes --build-from-source --skip-link "$validation_tap/mactions"
           brew test --force "$validation_tap/mactions"
           brew audit --strict "$validation_tap/mactions"
