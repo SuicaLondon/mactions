@@ -244,15 +244,7 @@ impl Service {
 
     fn has_login(&self) -> Result<bool> {
         let output = run(Command::new("/bin/launchctl").args(["print", &self.domain()]))?;
-        if output.ok {
-            return Ok(true);
-        }
-        ensure!(
-            missing_service(&output.text),
-            "Could not inspect macOS login session: {}",
-            output.text.trim()
-        );
-        Ok(false)
+        login_available(&output)
     }
 
     fn response(&self, installed: bool, running: bool, state: &str) -> Result<Value> {
@@ -345,6 +337,23 @@ fn missing_service(text: &str) -> bool {
         || text.contains("Could not find domain")
 }
 
+fn login_available(output: &Output) -> Result<bool> {
+    if output.ok {
+        return Ok(true);
+    }
+    ensure!(
+        unavailable_login_domain(&output.text),
+        "Could not inspect macOS login session: {}",
+        output.text.trim()
+    );
+    Ok(false)
+}
+
+fn unavailable_login_domain(text: &str) -> bool {
+    // launchctl can resolve a user domain before its GUI login domain is usable.
+    missing_service(text) || text.contains("125: Domain does not support specified action")
+}
+
 fn service_pid(info: &str) -> Option<u32> {
     info.lines().find_map(|line| {
         line.trim()
@@ -414,7 +423,7 @@ pub fn start(root: &Path) -> Result<Value> {
         let mut response = service.response(true, false, "pending_login")?;
         if !enabled.ok {
             ensure!(
-                missing_service(&enabled.text),
+                unavailable_login_domain(&enabled.text),
                 "Could not enable manager service: {}",
                 enabled.text.trim()
             );
@@ -620,6 +629,39 @@ fn checked(command: &mut Command) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsupported_gui_domain_waits_for_login() {
+        let output = Output {
+            ok: false,
+            text: "Could not print domain: 125: Domain does not support specified action\n".into(),
+        };
+        assert!(!login_available(&output).unwrap());
+        assert!(unavailable_login_domain(
+            "Could not enable service: 125: Domain does not support specified action\n"
+        ));
+    }
+
+    #[test]
+    fn login_probe_preserves_success_missing_domain_and_unexpected_errors() {
+        assert!(login_available(&Output {
+            ok: true,
+            text: "gui/501 = {}".into(),
+        })
+        .unwrap());
+        assert!(!login_available(&Output {
+            ok: false,
+            text: "Could not find domain for user gui: 501".into(),
+        })
+        .unwrap());
+        let denied = "Could not print domain: 1: Operation not permitted";
+        assert!(login_available(&Output {
+            ok: false,
+            text: denied.into(),
+        })
+        .is_err());
+        assert!(!unavailable_login_domain(denied));
+    }
 
     fn fixture(directory: &Path) -> Service {
         Service::at(
