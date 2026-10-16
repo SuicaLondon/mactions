@@ -5,9 +5,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import App from './app/components/App';
+import { startAppSession } from './app/session/start-app-session';
 import { createQueryClient } from './shared/api/query-client';
 
 const client = createQueryClient();
+startAppSession();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={client}>

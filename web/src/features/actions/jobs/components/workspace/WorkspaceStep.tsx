@@ -2,8 +2,8 @@ import type { Job, JobStep } from '../../../../../shared/api/types';
 import { duration } from '../../../../../shared/lib/activity-format';
 import { cn } from '../../../../../shared/lib/cn';
 import { Status } from '../../../shared/components/Status';
+import { Timestamp } from '../../../shared/components/Timestamp';
 import { JobLogs } from '../logs/JobLogs';
-import { WorkspaceTimestamp } from './WorkspaceTimestamp';
 
 export function WorkspaceStep({
   job,
@@ -16,32 +16,27 @@ export function WorkspaceStep({
 }) {
   return (
     <section
-      className="step-detail flex min-h-0 flex-1 flex-col pt-2.5"
+      className="flex min-h-0 flex-1 flex-col pt-2.5"
       aria-label={`Step ${step.number}: ${step.name}`}
     >
       <header
         className={cn(
-          'step-detail-heading mb-2 flex shrink-0 flex-wrap items-center justify-between',
+          'mb-2 flex shrink-0 flex-wrap items-center justify-between',
           'gap-x-4.5 gap-y-2',
         )}
       >
         <div
           className={cn(
-            'step-detail-title flex min-w-0 shrink grow basis-55 items-center gap-2',
+            'flex min-w-0 shrink grow basis-55 items-center gap-2',
             'max-lg:basis-full',
           )}
         >
-          <span
-            className={cn(
-              'workspace-context-label shrink-0 text-xs font-medium whitespace-nowrap',
-              'text-muted',
-            )}
-          >
+          <span className={cn('shrink-0 text-xs font-medium whitespace-nowrap', 'text-muted')}>
             Step {step.number}
           </span>
           <h3
             className={cn(
-              'm-0 overflow-hidden text-sm leading-snug font-medium text-ellipsis',
+              'm-0 overflow-hidden text-sm/snug font-medium text-ellipsis',
               'whitespace-nowrap',
             )}
             title={step.name}
@@ -57,7 +52,7 @@ export function WorkspaceStep({
         </div>
         <dl
           className={cn(
-            'step-header-timing m-0 flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5 p-0',
+            'm-0 flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5 p-0',
             'text-xs @max-lg/job-detail:gap-x-2.5 @max-lg/job-detail:gap-y-1.25',
           )}
         >
@@ -70,24 +65,24 @@ export function WorkspaceStep({
           <div className="inline-flex gap-1.25">
             <dt className="text-muted">Started</dt>
             <dd className="m-0 whitespace-nowrap tabular-nums">
-              <WorkspaceTimestamp value={step.started_at} compact />
+              <Timestamp value={step.started_at} format="time" />
             </dd>
           </div>
           <div className="inline-flex gap-1.25">
             <dt className="text-muted">Finished</dt>
             <dd className="m-0 whitespace-nowrap tabular-nums">
-              <WorkspaceTimestamp value={step.completed_at} compact />
+              <Timestamp value={step.completed_at} format="time" />
             </dd>
           </div>
         </dl>
       </header>
       <div
         id={`job-${job.id}-selected-step-${step.number}-log`}
-        className="step-output m-0 flex min-h-0 flex-1 flex-col p-0"
+        className="m-0 flex min-h-0 flex-1 flex-col p-0"
         role="region"
         aria-label={`Output for ${step.name}`}
       >
-        <JobLogs job={job} step={step} repository={repository} fill />
+        <JobLogs job={job} step={step} source={{ repository }} fill />
       </div>
     </section>
   );

@@ -1,56 +1,52 @@
 import { memo } from 'react';
 
 import { cn } from '../../../../../shared/lib/cn';
-import { runnerRowLayout } from '../../../../../shared/ui/layout/list-layout';
+import { useRunnerInspectorStore } from '../../../inspector/stores/runner-inspector-store';
 import { RunnerStatus } from '../../../shared/components/RunnerStatus';
-import { statusFor } from '../../../shared/models/runner-model';
-import { deviceLabels, type RunnerListRowProps } from '../../models/runner-row';
-import { RunnerWorkSummary } from '../work/RunnerWorkSummary';
+import { rowFocusIndex } from '../../models/row-navigation';
+import { runnerRowLayout } from '../../models/runner-grid-layout';
+import type { DisplayRunner } from '../../models/runner-list';
+import type { RunnerRowCallbacks, RunnerWorkState } from '../../models/runner-row';
+import { runnerRowPresentation } from '../../models/runner-row-presentation';
 import { RunnerRowActions } from './RunnerRowActions';
 import { RunnerRowIdentity } from './RunnerRowIdentity';
 import { RunnerRowLabels } from './RunnerRowLabels';
 import { RunnerRowScope } from './RunnerRowScope';
+import { RunnerWorkSummary } from './RunnerWorkSummary';
+
+export interface RunnerListRowProps {
+  row: DisplayRunner;
+  selected: boolean;
+  /** GitHub's first inventory answer is still pending. */
+  checkingGitHub: boolean;
+  work: RunnerWorkState;
+  callbacks: RunnerRowCallbacks;
+}
 
 export const RunnerListRow = memo(function RunnerListRow({
   row,
   selected,
-  runs,
-  loadingWork,
-  connected,
-  unavailableWork,
-  onOpen,
-  onMenu,
-  onDetails,
+  checkingGitHub,
+  work,
+  callbacks: { onOpen, onMenu, onDetails },
 }: RunnerListRowProps) {
-  const target = row.local?.target ?? row.remote?.target;
-  let state;
-  if (row.local) state = statusFor(row.local);
-  else {
-    let text = row.remote?.status ?? 'Unknown';
-    let style = '';
-    if (row.remote?.busy) text = 'Busy';
-    else if (row.remote?.status === 'online') text = 'Idle';
-    if (row.remote?.status === 'online') {
-      style = 'online';
-      if (row.remote.busy) style = 'busy';
-    }
-    state = { text, style };
-  }
-  const deviceLabel = deviceLabels[row.device];
-  let scopeLabel = 'Repository';
-  if (target?.kind === 'org') scopeLabel = 'Organization';
-  if (row.scopeUnconfirmed) scopeLabel = 'Repository access unconfirmed';
+  const view = runnerRowPresentation(row, checkingGitHub);
+  const followDetails = useRunnerInspectorStore((state) => state.followDetails);
   return (
     <div
-      className={cn(runnerRowLayout, {
-        'showing-details': selected,
-      })}
+      className={cn(runnerRowLayout, 'aria-selected:bg-accent/8 aria-selected:hover:bg-accent/8')}
       role="row"
       data-id={row.localId}
+      data-row-focus
       tabIndex={0}
-      aria-label={`${row.name}, ${state.text}, ${deviceLabel}`}
+      aria-label={`${row.name}, ${view.state.text}, ${view.deviceLabel}`}
+      title={`Open runs for ${row.name}`}
       aria-selected={selected}
       onClick={() => onOpen(row)}
+      // An open details panel follows j/k and arrow-key focus; a closed one stays closed.
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) followDetails(row);
+      }}
       onContextMenu={(event) => {
         if (!row.local) return;
         event.preventDefault();
@@ -62,21 +58,17 @@ export const RunnerListRow = memo(function RunnerListRow({
         if (['Enter', ' '].includes(event.key)) {
           event.preventDefault();
           onOpen(row);
-        } else if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+          return;
+        }
+        const items = [
+          ...event.currentTarget.parentElement!.querySelectorAll<HTMLElement>(
+            ':scope > [data-row-focus]',
+          ),
+        ];
+        const next = rowFocusIndex(event.key, items.indexOf(event.currentTarget), items.length);
+        if (next !== undefined) {
           event.preventDefault();
-          const items = [
-            ...event.currentTarget.parentElement!.querySelectorAll<HTMLElement>('.runner-grid-row'),
-          ];
-          const index = items.indexOf(event.currentTarget);
-          let nextIndex;
-          if (event.key === 'Home') nextIndex = 0;
-          else if (event.key === 'End') nextIndex = items.length - 1;
-          else {
-            let direction = -1;
-            if (event.key === 'ArrowDown') direction = 1;
-            nextIndex = Math.max(0, Math.min(items.length - 1, index + direction));
-          }
-          items[nextIndex]?.focus();
+          items[next]?.focus();
         } else if (
           row.local &&
           (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))
@@ -87,53 +79,49 @@ export const RunnerListRow = memo(function RunnerListRow({
         }
       }}
     >
-      <RunnerRowIdentity row={row} deviceLabel={deviceLabel} />
-      <RunnerRowScope target={target} scopeLabel={scopeLabel} />
+      <RunnerRowIdentity name={row.name} deviceLabel={view.deviceLabel} readOnly={!row.local} />
+      <RunnerRowScope target={view.target} scopeLabel={view.scopeLabel} />
       <div
         className={cn(
-          cn(
-            'runner-grid-status @max-3xl:col-start-3 @max-3xl:col-end-auto',
-            '@max-3xl:row-start-1 @max-3xl:row-end-3 @max-md:col-start-2 @max-md:col-end-auto',
-            '@max-md:row-start-1 @max-md:row-end-auto',
-          ),
+          '@max-3xl:col-start-3 @max-3xl:col-end-auto',
+          '@max-3xl:row-start-1 @max-3xl:row-end-3 @max-md:col-start-2 @max-md:col-end-auto',
+          '@max-md:row-start-1 @max-md:row-end-auto',
           'min-w-0',
         )}
         role="gridcell"
       >
         <RunnerStatus
-          label={state.text}
-          state={state.style}
+          label={view.statusLabel}
+          title={view.statusTitle}
+          state={view.state.style}
           className="p-0 leading-4.5 font-medium"
         />
       </div>
-      <div
-        className="runner-grid-labels flex min-w-0 items-center gap-1.25 @max-5xl:hidden"
-        role="gridcell"
-        title={row.labels.join(', ')}
-      >
-        <RunnerRowLabels row={row} />
-      </div>
+      <RunnerRowLabels
+        labels={row.labels}
+        checking={view.checkingLabels}
+        title={view.labelsTitle}
+      />
       <div
         className={cn(
-          cn(
-            'runner-grid-work @max-3xl:col-start-2 @max-3xl:col-end-auto @max-3xl:row-start-2',
-            '@max-3xl:row-end-auto @max-md:col-start-2 @max-md:col-end-4 @max-md:row-start-2',
-            '@max-md:row-end-auto',
-          ),
+          '@max-3xl:col-start-2 @max-3xl:col-end-auto @max-3xl:row-start-2',
+          '@max-3xl:row-end-auto @max-md:col-start-2 @max-md:col-end-4 @max-md:row-start-2',
+          '@max-md:row-end-auto',
           'min-w-0',
         )}
         role="gridcell"
       >
         <RunnerWorkSummary
-          runs={runs}
+          work={work}
           githubId={row.githubId}
-          loading={loadingWork}
-          connected={connected}
-          unavailable={unavailableWork}
           busy={row.local?.busy ?? row.remote?.busy ?? null}
         />
       </div>
-      <RunnerRowActions row={row} onDetails={onDetails} />
+      <RunnerRowActions
+        name={row.name}
+        onOpen={() => onOpen(row)}
+        onDetails={() => onDetails(row)}
+      />
     </div>
   );
 });

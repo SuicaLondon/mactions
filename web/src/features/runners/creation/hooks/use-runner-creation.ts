@@ -1,41 +1,34 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { request } from '../../../../shared/api/client';
-import { RUNNERS_KEY } from '../../data/hooks/use-runner-snapshot';
+import { RUNNERS_KEY } from '../../data/models/runner-snapshot-query';
 import { splitLabels } from '../../shared/models/runner-model';
-import { type RunnerRegistrationMode, type RunnerScopeKind } from '../models/runner-creation';
+import { type RunnerCreationRequest } from '../models/runner-creation';
+import { useRunnerCreationStore } from '../stores/runner-creation-store';
 
-export interface RunnerCreationOptions {
-  kind: RunnerScopeKind;
-  target: string;
-  prefix: string;
-  labels: string;
-  mode: RunnerRegistrationMode;
-  token: string;
-  onCreated: () => void;
-}
+export const RUNNER_CREATION_KEY = ['runner-creation'];
 
-export function useRunnerCreation({
-  kind,
-  target,
-  prefix,
-  labels,
-  mode,
-  token,
-  onCreated,
-}: RunnerCreationOptions) {
+export function useRunnerCreation(onCreated: () => void) {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: () => {
+    mutationKey: RUNNER_CREATION_KEY,
+    mutationFn: ({ kind, target, prefix, labels, mode, token }: RunnerCreationRequest) => {
       const payload = { kind, target, prefix, labels: splitLabels(labels) };
       if (mode === 'token')
         return request('/api/runners', { ...payload, registration_token: token });
       return request('/api/runners', payload);
     },
-    onSuccess: onCreated,
+    onError: (error) => {
+      useRunnerCreationStore.getState().setFailure(error.message);
+    },
+    onSuccess: () => {
+      useRunnerCreationStore.getState().setFailure(null);
+      onCreated();
+    },
     onSettled: () => {
       void client.invalidateQueries({ queryKey: RUNNERS_KEY });
     },
+    // The dialog's request disappears with it, so a reopened dialog starts without an error.
     gcTime: 0,
   });
 }

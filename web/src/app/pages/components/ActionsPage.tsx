@@ -1,28 +1,38 @@
-import { InfoIcon } from '../../../shared/ui/icons/status/InfoIcon';
-import { ServerIcon } from '../../../shared/ui/icons/system/ServerIcon';
-import { LoadingPlaceholder } from '../../../shared/ui/loading/components/LoadingPlaceholder';
-import { useNavigation } from '../../navigation/hooks/use-navigation';
-import { useRunnerWorkspace } from '../../runners/hooks/use-runner-workspace';
-import { useGitHubSetup } from '../../setup/hooks/use-github-setup';
+import { RunDetailSkeleton } from '../../../features/actions/runs/components/detail/RunDetailSkeleton';
+import { ActivityTableSkeleton } from '../../../features/actions/shared/components/table/ActivityTableSkeleton';
+import { useConnection } from '../../../features/github/hooks/use-connection';
+import { useRunnerInspectorStore } from '../../../features/runners/inspector/stores/runner-inspector-store';
+import { InfoIcon } from '../../../shared/ui/icons/InfoIcon';
+import { ServerIcon } from '../../../shared/ui/icons/ServerIcon';
+import { useCurrentPage } from '../../navigation/hooks/use-current-page';
+import { useConnectionCheck } from '../../setup/hooks/use-connection-check';
+import { useWelcomeStore } from '../../setup/stores/welcome-store';
 import { ActionsContent } from './ActionsContent';
+import { ConnectionCheckError } from './ConnectionCheckError';
 import { PageEmptyState } from './PageEmptyState';
 
 export function ActionsPage() {
-  const { page } = useNavigation();
-  const { connection, connected, openSetup } = useGitHubSetup();
-  const { inspector } = useRunnerWorkspace();
+  const page = useCurrentPage();
+  const connection = useConnection();
+  const check = useConnectionCheck();
+  const openSetup = useWelcomeStore((state) => state.openSetup);
+  const openDetails = useRunnerInspectorStore((state) => state.openDetails);
 
-  if (connection.isPending) {
-    let kind: 'run' | 'history' | 'runs' = 'runs';
-    if (page.type === 'run') kind = 'run';
-    else if (page.type === 'history') kind = 'history';
-    return <LoadingPlaceholder kind={kind} />;
+  if (check.failed) {
+    return (
+      <ConnectionCheckError message={check.error} retrying={check.checking} onRetry={check.retry} />
+    );
   }
-  if (!connected) {
+  if (connection.isPending) {
+    if (page.type === 'run') return <RunDetailSkeleton />;
+    if (page.type === 'history') return <ActivityTableSkeleton kind="history" />;
+    return <ActivityTableSkeleton kind="runs" />;
+  }
+  if (!connection.data?.connected) {
     return (
       <PageEmptyState
         title="Connect GitHub to view runs"
-        icon={<InfoIcon className="mb-4.5 size-11.5 stroke-2 text-muted" />}
+        icon={InfoIcon}
         message="Runner controls and diagnostic logs are available on this device."
         action={<button onClick={openSetup}>Connect GitHub</button>}
       />
@@ -32,9 +42,9 @@ export function ActionsPage() {
     return (
       <PageEmptyState
         title="Setup is incomplete"
-        icon={<ServerIcon className="mb-4.5 size-11.5 stroke-2 text-muted" />}
+        icon={ServerIcon}
         message="This runner does not have a GitHub identity yet. Open its details to resume setup."
-        action={<button onClick={() => inspector.openDetails(page.runner)}>Runner Details</button>}
+        action={<button onClick={() => openDetails(page.runner)}>Runner Details</button>}
       />
     );
   }

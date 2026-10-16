@@ -1,13 +1,16 @@
+import { useCopyText } from '../../../../shared/hooks/use-copy-text';
 import { cn } from '../../../../shared/lib/cn';
-import { RunnerDialog } from './RunnerDialog';
+import { ModalDialog } from '../../../../shared/ui/dialog/components/ModalDialog';
 
 export function StorageDialog({ path, onClose }: { path: string; onClose: () => void }) {
+  const { state, copy } = useCopyText();
+  const copied = state === 'copied';
   return (
-    <RunnerDialog title="Data Directory" onClose={onClose}>
+    <ModalDialog onClose={onClose}>
       {(titleId) => (
         <>
-          <h2 id={titleId}>Data Directory</h2>
-          <p className="dialog-description mx-0 mt-0 mb-4 text-xs leading-relaxed text-muted">
+          <h2 id={titleId}>Data directory</h2>
+          <p className="mx-0 mt-0 mb-4 text-xs/relaxed text-muted">
             Runner installations, workspaces, and logs are stored here.
           </p>
           <code
@@ -19,16 +22,41 @@ export function StorageDialog({ path, onClose }: { path: string; onClose: () => 
           >
             {path}
           </code>
-          <p className="form-help mx-0 my-3.5 text-xs leading-relaxed text-muted">
-            Closing this web interface leaves runners running.
-          </p>
-          <div className="dialog-actions mt-6 flex justify-end gap-2">
-            <button className="primary min-w-19.5 text-xs" onClick={onClose}>
+          <div className="mt-6 flex justify-end gap-2">
+            <button
+              type="button"
+              className="mr-auto min-w-19.5 text-xs"
+              aria-label="Copy path"
+              onClick={() => void copy(path)}
+            >
+              {/* Both labels share one grid cell so the button keeps its width. */}
+              <span className="inline-grid justify-items-center">
+                <span className={cn('col-start-1 row-start-1', { invisible: copied })}>
+                  Copy path
+                </span>
+                <span
+                  className={cn('col-start-1 row-start-1', { invisible: !copied })}
+                  aria-hidden="true"
+                >
+                  Copied
+                </span>
+              </span>
+            </button>
+            <button type="button" className="min-w-19.5 text-xs" onClick={onClose}>
               Done
             </button>
           </div>
+          <p className="sr-only" role="status">
+            {copied && 'Path copied.'}
+          </p>
+          {/* Below the actions, so a failure never moves the button the user just pressed. */}
+          {state === 'failed' && (
+            <p className="mx-0 mt-3 mb-0 text-xs/normal text-danger" role="alert">
+              Could not copy the path. Select it and copy it manually.
+            </p>
+          )}
         </>
       )}
-    </RunnerDialog>
+    </ModalDialog>
   );
 }

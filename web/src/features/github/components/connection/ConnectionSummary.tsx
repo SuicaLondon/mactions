@@ -1,61 +1,51 @@
+import { type ReactNode } from 'react';
+
 import { cn } from '../../../../shared/lib/cn';
-import type { GitHubAuthState } from '../../types/github-auth';
-import { ConnectionSummaryLabel } from './ConnectionSummaryLabel';
+import { InlineLoading } from '../../../../shared/ui/loading/components/InlineLoading';
+import { useConnection } from '../../hooks/use-connection';
+import type { ConnectionPanelVariant } from '../../models/connection-panel';
+import { ConnectionRecheckButton } from './ConnectionRecheckButton';
+
+const summaryClasses: Record<ConnectionPanelVariant, string> = {
+  banner: 'gap-3',
+  card: 'gap-x-3 gap-y-2',
+};
 
 export function ConnectionSummary({
-  welcome,
-  connection,
-  summary,
-  setExpanded,
-  showContent,
-  setDismissed,
-  settingsLabel,
-  checkAgain,
+  variant,
+  open,
+  onToggle,
 }: {
-  welcome: boolean;
-  connection: GitHubAuthState['connection'];
-  summary: string;
-  setExpanded: GitHubAuthState['setExpanded'];
-  showContent: GitHubAuthState['showContent'];
-  setDismissed: GitHubAuthState['setDismissed'];
-  settingsLabel: 'Connection settings' | 'Connect GitHub';
-  checkAgain: GitHubAuthState['checkAgain'];
+  variant: ConnectionPanelVariant;
+  /** The connection details below the summary are visible. */
+  open: boolean;
+  onToggle: () => void;
 }) {
-  let toggleLabel: string = settingsLabel;
-  if (showContent) toggleLabel = 'Hide';
+  const connection = useConnection();
+  let summary: ReactNode = 'GitHub connection needs attention';
+  if (connection.isPending) summary = <InlineLoading label="Checking GitHub connection…" />;
+  else if (connection.data?.connected) summary = `Connected as @${connection.data.login}`;
+  else if (connection.isError) summary = 'Unable to check GitHub connection';
+  let toggleLabel = 'Connect GitHub';
+  if (open) toggleLabel = 'Hide';
+  else if (connection.data?.connected) toggleLabel = 'Connection settings';
   return (
-    <div
-      className={cn('connection-summary flex flex-wrap items-center gap-3', {
-        'gap-x-3 gap-y-2': welcome,
-      })}
-    >
+    <div className={cn('flex flex-wrap items-center', summaryClasses[variant])}>
       <span
-        className={cn('connection-dot size-1.75 shrink-0 rounded-full bg-muted', {
-          'bg-green-500': connection.data?.connected,
+        className={cn('size-1.75 shrink-0 rounded-full bg-muted', {
+          'bg-activity-success': connection.data?.connected,
         })}
       />
-      <span>
-        <ConnectionSummaryLabel connection={connection} summary={summary} />
-      </span>
+      <span>{summary}</span>
       <button
         type="button"
         className="min-h-5.5 border-0 bg-transparent p-0 text-xs text-accent shadow-none"
-        onClick={() => {
-          setExpanded(!showContent);
-          setDismissed(showContent);
-        }}
-        aria-expanded={Boolean(showContent)}
+        onClick={onToggle}
+        aria-expanded={open}
       >
         {toggleLabel}
       </button>
-      <button
-        type="button"
-        className="min-h-5.5 border-0 bg-transparent p-0 text-xs text-accent shadow-none"
-        disabled={connection.isFetching}
-        onClick={checkAgain}
-      >
-        Check again
-      </button>
+      <ConnectionRecheckButton />
     </div>
   );
 }

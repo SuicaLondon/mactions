@@ -10,7 +10,7 @@ import {
 } from 'date-fns';
 
 import type { Job } from '../../../shared/api/types';
-import type { StatusIconName } from '../../../shared/ui/icons/status/status-icons';
+import type { StatusIconName } from '../../../shared/ui/icons/status-icons';
 
 export function jobState(job: Job) {
   const value = job.conclusion || job.status;

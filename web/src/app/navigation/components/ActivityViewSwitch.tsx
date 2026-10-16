@@ -1,6 +1,5 @@
 import { cn } from '../../../shared/lib/cn';
-import type { ActivityView } from '../models/activity-views';
-import { views } from '../models/activity-views';
+import { type ActivityView, views } from '../models/activity-views';
 
 export function ActivityViewSwitch({
   value,
@@ -11,7 +10,10 @@ export function ActivityViewSwitch({
 }) {
   return (
     <div
-      className="main-views inline-flex h-8 shrink-0 gap-0.5 rounded-lg bg-muted/10 p-0.5"
+      className={cn(
+        'inline-flex h-8 shrink-0 gap-0.5 rounded-lg bg-muted/10 p-0.5',
+        'max-md:h-11 pointer-coarse:h-11',
+      )}
       role="group"
       aria-label="Activity view"
     >
@@ -23,6 +25,7 @@ export function ActivityViewSwitch({
           onClick={() => onChange(view.value)}
           className={cn(
             'h-7 min-h-7 rounded-md border-0 px-3 py-0 text-xs font-medium transition-colors',
+            'max-md:h-10 max-md:min-h-10 pointer-coarse:h-10 pointer-coarse:min-h-10',
             'duration-150 hover:filter-none active:translate-y-0',
             'focus-visible:outline-offset-0 motion-reduce:transition-none',
             {

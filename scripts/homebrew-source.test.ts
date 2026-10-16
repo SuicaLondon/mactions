@@ -28,17 +28,15 @@ function sourceFixture(root: string, options: SourceOptions = {}) {
     'build.rs': 'fn main() {}',
     'src/main.rs': 'fn main() {}',
     'src/lib.rs': '// Fixture library',
-    'docs/THIRD-PARTY-NOTICES.md': '# Fixture notices',
-    'scripts/frontend-notices.ts': '// Fixture frontend notice generator',
-    'scripts/generate-notices.ts': '// Fixture Rust notice generator',
-    'scripts/notices/licenses.ts': '// Fixture license helper',
+    'about.toml': 'accepted = ["MIT"]',
+    'about.hbs': '{{#each licenses}}{{{text}}}{{/each}}',
     'scripts/shared/paths.ts': '// Fixture path helper',
     'web/index.html': '<div id="root"></div>',
     'web/src/main.tsx': '// Fixture frontend',
-    'web/package-lock.json': '{}',
-    'web/package.json': JSON.stringify({ scripts: { 'build:assets': 'vite build' } }),
+    'package-lock.json': '{}',
+    'package.json': JSON.stringify({ scripts: { 'build:assets': 'vite build web' } }),
   };
-  if (options.assetsScript === false) files['web/package.json'] = '{}';
+  if (options.assetsScript === false) files['package.json'] = '{}';
   for (const [name, content] of Object.entries(files)) {
     if (name === options.omit) continue;
     const destination = path.join(source, name);
@@ -70,17 +68,13 @@ test('generates licensed source-build metadata from the final archive bytes', ()
     assert.ok(formula.includes(`sha256 "${checksum}"`));
     assert.ok(!formula.includes('  version "0.3.0"'));
     assert.ok(formula.includes('license "MIT"'));
+    assert.ok(formula.includes('depends_on "cargo-about" => :build'));
     assert.ok(formula.includes('depends_on "node" => :build'));
     assert.ok(formula.includes('depends_on "rust" => :build'));
     assert.ok(formula.includes('depends_on "gh"'));
     assert.ok(formula.includes('"cargo", "install", *std_cargo_args'));
-    assert.ok(
-      formula.includes('"node", "--experimental-strip-types", "scripts/frontend-notices.ts"'),
-    );
-    assert.ok(
-      formula.includes('"node", "--experimental-strip-types", "scripts/generate-notices.ts"'),
-    );
-    assert.ok(formula.includes('pkgshare.install "LICENSE", "docs/THIRD-PARTY-NOTICES.md"'));
+    assert.ok(formula.includes('"cargo", "about", "generate", "--frozen", "--fail", "about.hbs"'));
+    assert.ok(formula.includes('"dist/licenses/FRONTEND-LICENSES.txt"'));
     assert.ok(!formula.includes('macos-arm64.tar.gz'));
     assert.ok(!formula.includes('libexec/gh'));
     execFileSync('/usr/bin/ruby', ['-c', output]);
@@ -132,8 +126,8 @@ test('rejects unlicensed or incomplete source archives before writing a formula'
       [{ licenseText: 'All rights reserved' }, /SuicaLondon MIT/],
       [{ omit: 'LICENSE' }, /missing LICENSE/],
       [{ omit: 'Cargo.lock' }, /missing Cargo.lock/],
-      [{ omit: 'web/package-lock.json' }, /missing web\/package-lock.json/],
-      [{ omit: 'scripts/notices/licenses.ts' }, /missing scripts\/notices\/licenses.ts/],
+      [{ omit: 'package-lock.json' }, /missing package-lock.json/],
+      [{ omit: 'about.toml' }, /missing about.toml/],
       [{ assetsScript: false }, /build:assets/],
       [{ version: '0.3.0-beta.1' }, /stable package version/],
     ];

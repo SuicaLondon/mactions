@@ -13,26 +13,21 @@ function Tree({
   onSelect: (selection: JobSelection) => void;
   onToggle: (jobId: number, expanded: boolean) => void;
 }) {
-  const { tree, keyboard } = useJobTree([], expandedJobIds, onSelect, onToggle);
+  const { tree, onKeyDown } = useJobTree([], expandedJobIds, onSelect, onToggle);
   return (
-    <ul ref={tree}>
+    <ul ref={tree} onKeyDown={onKeyDown}>
       <li>
-        <button role="treeitem" data-node="job-1" onKeyDown={(event) => keyboard(event, 1)}>
+        <button role="treeitem" data-node="job-1">
           First job
         </button>
       </li>
       <li>
-        <button
-          role="treeitem"
-          data-node="job-1-step-1"
-          data-parent="job-1"
-          onKeyDown={(event) => keyboard(event, 1, 1)}
-        >
+        <button role="treeitem" data-node="job-1-step-1" data-parent="job-1">
           First step
         </button>
       </li>
       <li>
-        <button role="treeitem" data-node="job-2" onKeyDown={(event) => keyboard(event, 2)}>
+        <button role="treeitem" data-node="job-2">
           Second job
         </button>
       </li>

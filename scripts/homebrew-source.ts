@@ -27,13 +27,11 @@ function sourceVersion(archive: string) {
     'build.rs',
     'src/main.rs',
     'src/lib.rs',
-    'docs/THIRD-PARTY-NOTICES.md',
-    'scripts/frontend-notices.ts',
-    'scripts/generate-notices.ts',
-    'scripts/notices/licenses.ts',
+    'about.toml',
+    'about.hbs',
     'scripts/shared/paths.ts',
-    'web/package.json',
-    'web/package-lock.json',
+    'package.json',
+    'package-lock.json',
     'web/index.html',
     'web/src/main.tsx',
   ]) {
@@ -62,17 +60,17 @@ function sourceVersion(archive: string) {
     !license.includes('THE SOFTWARE IS PROVIDED "AS IS"')
   )
     throw new Error('Source archive requires the SuicaLondon MIT license');
-  const frontend: unknown = JSON.parse(read('web/package.json'));
+  const npmManifest: unknown = JSON.parse(read('package.json'));
   if (
-    !frontend ||
-    typeof frontend !== 'object' ||
-    !('scripts' in frontend) ||
-    !frontend.scripts ||
-    typeof frontend.scripts !== 'object' ||
-    !('build:assets' in frontend.scripts) ||
-    typeof frontend.scripts['build:assets'] !== 'string'
+    !npmManifest ||
+    typeof npmManifest !== 'object' ||
+    !('scripts' in npmManifest) ||
+    !npmManifest.scripts ||
+    typeof npmManifest.scripts !== 'object' ||
+    !('build:assets' in npmManifest.scripts) ||
+    typeof npmManifest.scripts['build:assets'] !== 'string'
   )
-    throw new Error('Source frontend must provide the build:assets script');
+    throw new Error('Source package.json must provide the build:assets script');
   return version;
 }
 
@@ -107,6 +105,7 @@ export function generateHomebrewSourceFormula(
 ${versionLine}  sha256 "${checksum}"
   license "MIT"
 
+  depends_on "cargo-about" => :build
   depends_on "node" => :build
   depends_on "rust" => :build
   depends_on arch: :arm64
@@ -114,16 +113,16 @@ ${versionLine}  sha256 "${checksum}"
   depends_on macos: :monterey
 
   def fetch
-    system "npm", "--prefix", "web", "ci", "--ignore-scripts", "--no-audit", "--no-fund"
+    system "npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"
     system "cargo", "fetch", "--locked"
   end
 
   def install
-    system "npm", "--prefix", "web", "run", "build:assets"
-    system "node", "--experimental-strip-types", "scripts/frontend-notices.ts"
+    system "npm", "run", "build:assets"
     system "cargo", "install", *std_cargo_args
-    system "node", "--experimental-strip-types", "scripts/generate-notices.ts"
-    pkgshare.install "LICENSE", "docs/THIRD-PARTY-NOTICES.md"
+    system "cargo", "about", "generate", "--frozen", "--fail", "about.hbs",
+           "--output-file", "dist/licenses/DEPENDENCY-LICENSES.txt"
+    pkgshare.install "LICENSE"
     pkgshare.install "dist/licenses/DEPENDENCY-LICENSES.txt", "dist/licenses/FRONTEND-LICENSES.txt"
   end
 
@@ -149,7 +148,6 @@ ${versionLine}  sha256 "${checksum}"
 
   test do
     assert_path_exists pkgshare/"LICENSE"
-    assert_path_exists pkgshare/"THIRD-PARTY-NOTICES.md"
     assert_path_exists pkgshare/"DEPENDENCY-LICENSES.txt"
     assert_path_exists pkgshare/"FRONTEND-LICENSES.txt"
     data = testpath/"data"

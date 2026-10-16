@@ -1,8 +1,5 @@
-//! GitHub CLI transport and safe published-log downloads.
-use super::{
-    commands::{run, run_with_limit},
-    Native,
-};
+//! GitHub JSON requests and safe published-log downloads through GitHub CLI.
+use super::{commands::run_with_limit, Native};
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::Value;
 use std::{process::Command, time::Duration};
@@ -53,51 +50,22 @@ impl Native {
         endpoint: &str,
         body: Option<Value>,
     ) -> Result<Value> {
-        let mut command = Command::new(&self.gh);
-        command.args([
-            "api",
-            "--hostname",
-            "github.com",
-            "--method",
-            method,
-            "-H",
-            "Accept: application/vnd.github+json",
-            "-H",
-            "X-GitHub-Api-Version: 2022-11-28",
-            endpoint,
-        ]);
-        command
-            .env("GH_PROMPT_DISABLED", "1")
-            .env("GH_PAGER", "cat");
         let bytes = body.map(|b| serde_json::to_vec(&b)).transpose()?;
-        if bytes.is_some() {
-            command.args(["--input", "-"]);
-        }
-        let output = run(&mut command, bytes.as_deref(), Duration::from_secs(45))?;
-        if !output.ok {
-            if output.text.contains("HTTP 401")
-                || output.text.contains("gh auth login")
-                || output.text.contains("GH_TOKEN")
-            {
-                bail!("GitHub authentication is missing or expired. Run `mactions auth login` on this Mac");
-            }
-            if output.text.contains("SAML") || output.text.contains("SSO") {
-                bail!("GitHub requires SSO authorization. Sign in to your organization on GitHub, authorize GitHub CLI, then check again");
-            }
-            if output.text.contains("OAuth App access restrictions")
-                || output.text.contains("organization approval")
-            {
-                bail!("Organization approval is required. Ask an organization owner to approve GitHub CLI, then check again");
-            }
-            if output.text.contains("HTTP 403") || output.text.contains("HTTP 404") {
-                // A 404 can hide an inaccessible repository; it is never sufficient proof of deletion.
-                bail!("GitHub denied access or could not find the target. Check the target and runner administration permissions (repository Administration or organization Self-hosted runners). SSO or organization approval may also be required");
-            }
-            bail!("GitHub request failed. Check connectivity, API rate limits, and authorization, then retry");
-        }
-        if output.text.trim().is_empty() {
+        let reply = self
+            .api
+            .request(&self.gh, method, endpoint, bytes.as_deref(), false)?;
+        if reply.body.trim().is_empty() {
             return Ok(Value::Null);
         }
-        serde_json::from_str(&output.text).context("GitHub returned invalid or oversized JSON")
+        serde_json::from_str(&reply.body).context("GitHub returned invalid or oversized JSON")
+    }
+
+    /// Fetches the signed-in user with the classic OAuth scopes GitHub reports in its headers.
+    pub(super) fn user_with_scopes(&self) -> Result<(Value, Option<Vec<String>>)> {
+        // Connection checks follow sign-in changes, so they never reuse a cached token.
+        let reply = self.api.request(&self.gh, "GET", "/user", None, true)?;
+        let user =
+            serde_json::from_str(&reply.body).context("GitHub returned invalid account JSON")?;
+        Ok((user, reply.scopes))
     }
 }

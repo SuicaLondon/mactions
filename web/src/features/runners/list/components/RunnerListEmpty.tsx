@@ -1,43 +1,44 @@
 import { cn } from '../../../../shared/lib/cn';
-import { ServerIcon } from '../../../../shared/ui/icons/system/ServerIcon';
+import { ServerIcon } from '../../../../shared/ui/icons/ServerIcon';
+import type { LocalRunners } from '../models/runner-list';
+import { runnerEmptyDescription, runnerEmptyTitle } from '../models/runner-list-status';
+
 interface RunnerListEmptyProps {
+  /** Rows before filtering; any means the filters hide them. */
   rowCount: number;
-  localError?: string;
+  local: Pick<LocalRunners, 'error' | 'onRefresh'>;
   localFetching: boolean;
-  emptyTitle: string;
-  onRefreshLocal: () => void;
   onAdd: () => void;
 }
-export function RunnerListEmpty({
-  rowCount,
-  localError,
-  localFetching,
-  emptyTitle,
-  onRefreshLocal,
-  onAdd,
-}: RunnerListEmptyProps) {
-  let emptyDescription = localError || 'Add a runner or choose another organization or repository.';
-  if (rowCount) emptyDescription = 'Try another search, status or device filter.';
+export function RunnerListEmpty({ rowCount, local, localFetching, onAdd }: RunnerListEmptyProps) {
+  // Distinct keys stop React reusing Try again as Add runner, which would carry its focus over.
+  let action = (
+    <button key="add" className="button-primary" onClick={onAdd}>
+      Add runner
+    </button>
+  );
+  if (local.error) {
+    action = (
+      <button key="retry" onClick={local.onRefresh} disabled={localFetching}>
+        Try again
+      </button>
+    );
+  }
   return (
     <div
       className={cn(
-        'empty mx-0 mb-4.5 flex min-h-77.5 flex-1 flex-col',
+        'mx-0 mb-4.5 flex min-h-77.5 flex-1 flex-col',
         'items-center justify-center px-6 py-10 text-center max-md:min-h-61.25',
       )}
     >
-      <ServerIcon className="mb-4.5 size-11.5 stroke-2 text-zinc-400" />
-      <h2 className="m-0 text-base font-semibold tracking-tight">{emptyTitle}</h2>
-      <p className="mt-2 max-w-67.5 text-xs leading-relaxed text-muted">{emptyDescription}</p>
-      {!!(!rowCount && localError) && (
-        <button onClick={onRefreshLocal} disabled={localFetching}>
-          Try again
-        </button>
-      )}
-      {!!(!rowCount && !localError) && (
-        <button className="primary" onClick={onAdd}>
-          Add Runner
-        </button>
-      )}
+      <ServerIcon className="mb-4.5 size-11.5 stroke-2 text-muted" />
+      <h2 className="m-0 text-base font-semibold tracking-tight">
+        {runnerEmptyTitle(rowCount, local.error)}
+      </h2>
+      <p className="mt-2 max-w-67.5 text-xs/relaxed text-muted">
+        {runnerEmptyDescription(rowCount, local.error)}
+      </p>
+      {!rowCount && action}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { secondsToMilliseconds } from 'date-fns';
+import { minutesToMilliseconds, secondsToMilliseconds } from 'date-fns';
 import { useMemo } from 'react';
 
 import { request } from '../../../../shared/api/client';
@@ -27,6 +27,8 @@ export function useRunnerInventory(scope: Scope, enabled = true) {
     },
     refetchIntervalInBackground: false,
     staleTime: 20_000,
+    // Keep the inventory across view switches so returning to Runners shows it immediately.
+    gcTime: minutesToMilliseconds(30),
   });
   const inventory = useMemo(() => mergeRunnerPages(query.data?.pages), [query.data]);
   return {

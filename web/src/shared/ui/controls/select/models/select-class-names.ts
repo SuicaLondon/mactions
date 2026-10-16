@@ -1,15 +1,15 @@
 import type { ClassNamesConfig } from 'react-select';
 
 import { cn } from '../../../../lib/cn';
-import type { SelectOption } from '../types';
+import type { SelectOption, SelectVariant } from '../types';
 
-export function selectClassNames(
-  compact: boolean,
-  embedded: boolean,
-): ClassNamesConfig<SelectOption, false> {
+export function selectClassNames(variant: SelectVariant): ClassNamesConfig<SelectOption, false> {
+  const compact = variant !== 'form';
+  const embedded = variant === 'field';
   return {
     control: (state) =>
-      cn('rounded-md text-xs', {
+      // Every select is a 40px touch target on phones and touch screens.
+      cn('rounded-md text-xs max-md:min-h-10! pointer-coarse:min-h-10!', {
         'min-h-7.5!': compact,
         'min-h-9!': !compact,
         'cursor-default! opacity-50': state.isDisabled,

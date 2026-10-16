@@ -13,7 +13,7 @@ export function WorkflowGraphHeading({ runCount, jobCount }: WorkflowGraphHeadin
   return (
     <header
       className={cn(
-        'workflow-graph-heading mx-0 mb-0 flex items-center justify-between gap-4',
+        'mx-0 mb-0 flex items-center justify-between gap-4',
         'border-b border-line px-4 py-3 max-sm:gap-2 max-sm:py-2.75',
       )}
     >

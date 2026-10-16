@@ -236,5 +236,4 @@ fn extract_step_log(output: &str, job_name: &str, step_name: &str) -> Result<Str
 }
 
 #[cfg(test)]
-#[path = "tests/logs.rs"]
 mod tests;

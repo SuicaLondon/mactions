@@ -5,6 +5,10 @@ use std::path::PathBuf;
 
 pub trait Backend: Send + Sync {
     fn api(&self, method: &str, endpoint: &str, body: Option<Value>) -> Result<Value>;
+    /// Returns the signed-in user and its classic OAuth scopes when GitHub reports them.
+    fn user_with_scopes(&self) -> Result<(Value, Option<Vec<String>>)> {
+        Ok((self.api("GET", "/user", None)?, None))
+    }
     fn job_logs(
         &self,
         _repository: &str,

@@ -1,42 +1,45 @@
-import { cn } from '../../../../shared/lib/cn';
-import type { GitHubAuthState } from '../../types/github-auth';
+import type { LoginAttempt } from '../../../../shared/api/types';
+import { ClampedMessage } from '../../../../shared/ui/feedback/components/ClampedMessage';
+import { useConnection } from '../../hooks/use-connection';
+import {
+  type AuthorizationErrors,
+  connectionErrorMessages,
+  isAuthorizationFailed,
+} from '../../models/connection-errors';
 
 interface ConnectionErrorsProps {
-  connection: GitHubAuthState['connection'];
-  auth: GitHubAuthState['auth'];
-  connect: GitHubAuthState['connect'];
-  cancel: GitHubAuthState['cancel'];
+  attempt: LoginAttempt | undefined;
+  authorizationErrors: AuthorizationErrors;
 }
 
-export function ConnectionErrors({ connection, auth, connect, cancel }: ConnectionErrorsProps) {
-  const error = connect.error ?? cancel.error ?? connection.error;
+function attemptMessage(attempt: LoginAttempt | undefined) {
+  if (!attempt || !isAuthorizationFailed(attempt)) return null;
+  let reason = 'GitHub authorization did not finish.';
+  if (attempt.status === 'expired') reason = 'The device code expired before it was entered.';
+  return `${reason} Start again, or run mactions auth login in the host terminal.`;
+}
+
+export function ConnectionErrors({ attempt, authorizationErrors }: ConnectionErrorsProps) {
+  const connection = useConnection();
+  const messages = connectionErrorMessages({
+    connection: connection.error,
+    ...authorizationErrors,
+  }).map(({ message }) => message);
+  const failed = attemptMessage(attempt);
+  if (failed) messages.unshift(failed);
   return (
     <>
-      {!!(auth.data?.status === 'failed' || auth.data?.status === 'expired') && (
-        <p
-          className={cn(
-            'error-message m-0 mx-0 rounded-md border border-red-500/20 bg-red-500/4 px-3',
-            'py-2.5 text-xs leading-relaxed wrap-anywhere whitespace-pre-wrap text-danger',
-          )}
-        >
-          Authorization {auth.data.status}. Try again, or run mactions auth login in the host
-          terminal.
-        </p>
-      )}
-      {!!error && (
-        <p
-          className={cn(
-            'error-message m-0 mx-0 rounded-md border border-red-500/20 bg-red-500/4 px-3',
-            'py-2.5 text-xs leading-relaxed wrap-anywhere whitespace-pre-wrap text-danger',
-          )}
-        >
-          {error.message}
-        </p>
-      )}
+      {/* Two reserved lines, so a failed or recovered authorization never resizes the banner.
+          Longer messages clamp, with a Details link to the full text. */}
+      <ClampedMessage className="w-full" textClassName="text-danger">
+        {messages.map((message) => (
+          <span key={message} role="alert">
+            {message}{' '}
+          </span>
+        ))}
+      </ClampedMessage>
       {!!(!connection.data?.connected && connection.data?.message) && (
-        <p className="detail-help mx-0 mt-2 mb-0 text-xs leading-relaxed text-muted">
-          {connection.data.message}
-        </p>
+        <p className="mx-0 mt-2 mb-0 text-xs/relaxed text-muted">{connection.data.message}</p>
       )}
     </>
   );

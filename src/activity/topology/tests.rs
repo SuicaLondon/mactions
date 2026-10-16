@@ -214,7 +214,9 @@ fn matrix_expansion_and_rendered_names_have_bounded_output() {
         "x".repeat(20_000),
         (0..64).map(|value| value.to_string()).collect::<Vec<_>>().join(", ")
     );
-    assert_eq!(parsed(&yaml, vec![])["partial"], true);
+    // Expansion is skipped; the default-name pattern still attributes runtime jobs cheaply.
+    let graph = parsed(&yaml, vec![runtime(1, "test (x, 1)")]);
+    assert_eq!(node(&graph, "test")["job_ids"], json!([1]));
 
     // Each job fits its budget, but all matchers together must remain bounded too.
     let mut yaml = String::from("jobs:\n");
@@ -244,11 +246,10 @@ fn duplicate_display_names_do_not_create_false_runtime_associations() {
 }
 
 #[test]
-fn expressions_and_reusable_workflows_remain_explicitly_unmapped() {
+fn expression_only_names_keep_every_job_unmapped() {
     for extra in [
         "name: ${{ inputs.name }}",
-        "uses: example/shared/.github/workflows/test.yml@main",
-        "strategy:\n      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}",
+        "name: ${{ matrix.a }} ${{ matrix.b }}",
     ] {
         let graph = parsed(
             &format!(
@@ -260,6 +261,48 @@ fn expressions_and_reusable_workflows_remain_explicitly_unmapped() {
         assert_eq!(graph["unmapped"], json!([1, 2]));
         assert_eq!(node(&graph, "dynamic")["needs"], json!(["prepare"]));
     }
+}
+
+#[test]
+fn reusable_and_runtime_matrix_jobs_match_their_static_name_text() {
+    let graph = parsed(
+        "jobs:\n  changes:\n    name: Detect changed areas\n  backend:\n    name: Backend / ${{ matrix.check }}\n    needs: changes\n    strategy:\n      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}\n  deploy:\n    needs: backend\n    uses: ./.github/workflows/deploy.yml\n  lint:\n    needs: changes\n    strategy:\n      matrix: ${{ fromJSON(needs.changes.outputs.lint) }}\n",
+        vec![
+            runtime(1, "Detect changed areas"),
+            runtime(2, "Backend / Checks"),
+            runtime(3, "Backend / Unit"),
+            runtime(4, "deploy / Release"),
+            runtime(5, "lint (web)"),
+            runtime(6, "Backend / "),
+            runtime(7, "Other"),
+        ],
+    );
+    assert_eq!(node(&graph, "changes")["job_ids"], json!([1]));
+    assert_eq!(node(&graph, "backend")["job_ids"], json!([2, 3]));
+    assert_eq!(node(&graph, "deploy")["job_ids"], json!([4]));
+    assert_eq!(node(&graph, "lint")["job_ids"], json!([5]));
+    assert_eq!(graph["unmapped"], json!([6, 7]));
+}
+
+#[test]
+fn overlapping_name_patterns_do_not_claim_a_job() {
+    let graph = parsed(
+        "jobs:\n  a:\n    name: Test ${{ inputs.x }}\n  b:\n    name: Test ${{ inputs.y }}\n",
+        vec![runtime(1, "Test unit")],
+    );
+    assert_eq!(graph["unmapped"], json!([1]));
+}
+
+#[test]
+fn name_patterns_match_text_that_is_not_ascii() {
+    let graph = parsed(
+        "jobs:\n  test:\n    name: Test ${{ matrix.suite }} on ${{ matrix.os }}\n    strategy:\n      matrix: ${{ fromJSON(inputs.matrix) }}\n",
+        vec![
+            runtime(1, "Test ünit on mac"),
+            runtime(2, "Test 单元 on mac"),
+        ],
+    );
+    assert_eq!(node(&graph, "test")["job_ids"], json!([1, 2]));
 }
 
 #[test]

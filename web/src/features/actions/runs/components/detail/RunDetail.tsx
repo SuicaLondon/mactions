@@ -1,13 +1,21 @@
-import type { Job } from '../../../../../shared/api/types';
+import { type ReactNode } from 'react';
+
+import { type Job } from '../../../../../shared/api/types';
 import { cn } from '../../../../../shared/lib/cn';
-import { WorkflowIcon } from '../../../../../shared/ui/icons/git/WorkflowIcon';
-import { LoadingPlaceholder } from '../../../../../shared/ui/loading/components/LoadingPlaceholder';
+import { ErrorState } from '../../../../../shared/ui/feedback/components/ErrorState';
 import { useRun } from '../../../data/hooks/use-run';
-import type { WorkflowRun } from '../../../data/types/activity-types';
-import { useRunSelection } from '../../hooks/use-run-selection';
-import { RunJobsContent } from './RunJobsContent';
-import { RunSelectedContent } from './RunSelectedContent';
+import { type WorkflowRun } from '../../../data/types/activity-types';
+import { JobTree } from '../../../jobs/components/tree/JobTree';
+import { useExpandedRunJobs } from '../../hooks/use-expanded-run-jobs';
+import { useLoadedRunJobs } from '../../hooks/use-loaded-run-jobs';
+import { type RunSelection, useRunJobSelection } from '../../hooks/use-run-job-selection';
+import { type RunProgress, runProgress } from '../../models/run-progress';
+import { RunFailureCallout } from '../graph/RunFailureCallout';
+import { RunGraphOverview } from '../graph/RunGraphOverview';
+import { RunDetailSkeleton } from './RunDetailSkeleton';
+import { RunJobsPanel } from './RunJobsPanel';
 import { RunWorkspaceHeader } from './RunWorkspaceHeader';
+import { SelectedJob } from './SelectedJob';
 
 export function RunDetail({
   run,
@@ -23,115 +31,125 @@ export function RunDetail({
   onOpenHistory: (job: Job) => void;
   initialJobId?: number;
   initialStepNumber?: number;
-  selection?: {
-    jobId: number | null;
-    stepNumber?: number;
-  };
-  onSelectionChange?: (selection: { jobId: number | null; stepNumber?: number }) => void;
+  selection?: RunSelection;
+  onSelectionChange?: (selection: RunSelection) => void;
 }) {
   const query = useRun(run);
-  const {
-    selectJob,
-    selection,
-    expandedJobIds,
-    loadedJobs,
-    onJobLoaded,
-    select,
-    showOverview,
-    toggle,
-  } = useRunSelection({ initialJobId, initialStepNumber, controlledSelection, onSelectionChange });
+  let openedJobId = initialJobId;
+  if (controlledSelection?.jobId) openedJobId = controlledSelection.jobId;
+  const { expandedJobIds, expandJob, toggleJob } = useExpandedRunJobs(openedJobId);
+  const { loadedJobs, onJobLoaded } = useLoadedRunJobs();
+  // Selecting a Job also expands it in the Job tree.
+  const { selection, select, selectJob, showOverview } = useRunJobSelection({
+    initialJobId,
+    initialStepNumber,
+    controlledSelection,
+    onSelectionChange,
+    onSelect: expandJob,
+  });
   const current = query.data?.run ?? run;
   const jobs = query.data?.jobs ?? [];
   const selectedJob = jobs.find((job) => job.id === selection?.jobId);
-  const completed = jobs.filter((job) => job.status === 'completed').length;
-  const failed = jobs.filter((job) =>
-    ['failure', 'timed_out'].includes(job.conclusion ?? ''),
-  ).length;
+  const progress = runProgress(jobs);
+  // Progress and refresh failures describe loaded jobs, so they wait for the first load.
+  let shownProgress: RunProgress | null = null;
+  let refreshError: Error | null = null;
+  if (query.data) {
+    shownProgress = progress;
+    refreshError = query.error;
+  }
+  const refresh = () => void query.refetch();
+  let jobList = (
+    <p className="m-0 grid flex-1 place-items-center p-5 text-muted">
+      GitHub has not reported any jobs for this run.
+    </p>
+  );
+  if (jobs.length) {
+    jobList = (
+      <JobTree
+        jobs={jobs}
+        loadedJobs={loadedJobs}
+        selected={selection}
+        expandedJobIds={expandedJobIds}
+        highlightRunnerId={highlightRunnerId}
+        onSelect={select}
+        onToggle={toggleJob}
+      />
+    );
+  }
+  let jobDetail = (
+    <RunGraphOverview
+      run={current}
+      jobs={jobs}
+      highlightRunnerId={highlightRunnerId}
+      onSelect={selectJob}
+    />
+  );
+  if (selectedJob) {
+    jobDetail = (
+      <SelectedJob
+        key={`${run.repository}:${selectedJob.id}`}
+        repository={run.repository}
+        selection={{ jobId: selectedJob.id, stepNumber: selection?.stepNumber }}
+        highlightRunnerId={highlightRunnerId}
+        onOpenHistory={onOpenHistory}
+        onLoaded={onJobLoaded}
+        onSelect={select}
+      />
+    );
+  }
+  // A loaded run stays on screen when a refresh fails; the header reports that failure.
+  let body: ReactNode = null;
+  if (query.data) {
+    body = (
+      <div
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-run-jobs max-lg:grid-cols-run-jobs-compact',
+          'max-md:flex-none max-md:grid-cols-1',
+        )}
+      >
+        {/* Phones stack the Jobs list above Overview, so failures lead the run body there. */}
+        {!selectedJob && (
+          <RunFailureCallout jobs={jobs} onSelect={selectJob} className="md:hidden" />
+        )}
+        <RunJobsPanel
+          jobCount={jobs.length}
+          hasFailures={progress.failed > 0}
+          selectedJobId={selectedJob?.id ?? null}
+          onShowOverview={showOverview}
+        >
+          {jobList}
+        </RunJobsPanel>
+        <div
+          className={cn('@container/job-detail min-w-0 overflow-auto', 'max-md:overflow-visible')}
+        >
+          {jobDetail}
+        </div>
+      </div>
+    );
+  } else if (query.error) {
+    body = (
+      <ErrorState
+        title="Couldn't load this run"
+        error={query.error}
+        retrying={query.isFetching}
+        onRetry={refresh}
+      />
+    );
+  } else if (query.isPending) {
+    body = <RunDetailSkeleton />;
+  }
   return (
     <section
-      className="run-detail run-workspace flex h-full min-h-0 flex-col"
+      className="flex h-full min-h-0 flex-col max-md:overflow-auto"
       aria-label={`Run details for ${current.name} #${current.number}`}
     >
       <RunWorkspaceHeader
-        current={current}
-        query={query}
-        completed={completed}
-        jobs={jobs}
-        failed={failed}
+        run={current}
+        progress={shownProgress}
+        refresh={{ error: refreshError, refreshing: query.isFetching, onRefresh: refresh }}
       />
-      {!!query.error && (
-        <p
-          className={cn(
-            'error-message m-0 mx-0 rounded-md border border-red-500/20 bg-red-500/4 px-3',
-            'py-2.5 text-xs leading-normal wrap-anywhere whitespace-pre-wrap text-danger',
-          )}
-          role="alert"
-        >
-          {query.error.message}
-        </p>
-      )}
-      {!!(query.isPending && !query.error) && <LoadingPlaceholder kind="run" />}
-      {!!query.data && (
-        <div
-          className={cn(
-            'run-detail-layout grid min-h-0 flex-1 grid-cols-[--spacing(75)_minmax(0,_1fr)]',
-            'max-lg:grid-cols-[--spacing(67.5)_minmax(0,_1fr)]',
-            'max-sm:grid-cols-1 max-sm:grid-rows-[auto_minmax(0,_1fr)]',
-          )}
-        >
-          <aside
-            className={cn(
-              'run-jobs min-w-0 overflow-auto border-r border-r-line bg-canvas px-0 py-2.5',
-              'pb-2.5 max-sm:max-h-48 max-sm:border-r-0 max-sm:border-b max-sm:border-line',
-            )}
-            aria-label="Jobs in this run"
-          >
-            <div className={'run-jobs-heading flex flex-col pb-1.25'}>
-              <button
-                className={cn(
-                  'run-overview-button mx-2 my-0 flex items-center justify-start gap-2 rounded-sm',
-                  'border-0 bg-transparent px-2.5 py-1.75 text-xs text-muted shadow-none',
-                  'aria-pressed:bg-accent/10 aria-pressed:text-accent',
-                  {
-                    selected: !selectedJob,
-                  },
-                )}
-                aria-pressed={!selectedJob}
-                onClick={showOverview}
-              >
-                <WorkflowIcon className="size-4" />
-                Overview
-              </button>
-              <h3 className="m-0 px-3 pt-3.25 pb-1.25 text-xs font-medium text-muted">
-                Jobs <span className="ml-1 text-xs font-normal">{jobs.length}</span>
-              </h3>
-            </div>
-            <RunJobsContent
-              jobs={jobs}
-              loadedJobs={loadedJobs}
-              selection={selection}
-              expandedJobIds={expandedJobIds}
-              highlightRunnerId={highlightRunnerId}
-              select={select}
-              toggle={toggle}
-            />
-          </aside>
-          <div className="run-job-detail @container/job-detail min-w-0 overflow-auto">
-            <RunSelectedContent
-              selectedJob={selectedJob}
-              run={run}
-              selection={selection}
-              highlightRunnerId={highlightRunnerId}
-              onOpenHistory={onOpenHistory}
-              onJobLoaded={onJobLoaded}
-              select={select}
-              current={current}
-              jobs={jobs}
-              selectJob={selectJob}
-            />
-          </div>
-        </div>
-      )}
+      {body}
     </section>
   );
 }

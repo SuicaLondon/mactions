@@ -619,5 +619,4 @@ fn save_status(root: &Path, state: &Value) -> Result<()> {
 }
 
 #[cfg(test)]
-#[path = "update_tests.rs"]
 mod tests;

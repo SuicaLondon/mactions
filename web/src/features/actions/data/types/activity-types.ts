@@ -44,6 +44,8 @@ export interface WorkflowRun {
   created_at: string | null;
   started_at: string | null;
   updated_at: string | null;
+  /** The GitHub trigger, such as `push` or `schedule`. */
+  event?: string | null;
   jobs?: JobSummary[];
 }
 

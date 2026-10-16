@@ -1,0 +1,6 @@
+# cargo-about configuration for the Rust dependency license file in release packages.
+# Generation fails when a crate uses a license that is not accepted here.
+accepted = ["Apache-2.0", "BSD-3-Clause", "CDLA-Permissive-2.0", "MIT", "Unicode-3.0"]
+targets = ["aarch64-apple-darwin"]
+# Test-only crates are never shipped.
+ignore-dev-dependencies = true

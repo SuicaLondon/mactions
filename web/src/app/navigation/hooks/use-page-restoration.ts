@@ -1,14 +1,53 @@
 import { type QueryKey, useQueryClient } from '@tanstack/react-query';
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { navigationQueryKey, type Page } from '../models/app-navigation';
-import type { AppPreferences } from './use-app-preferences';
+import { navigationQueryKey, pageTransition } from '../models/app-navigation';
+import { useNavigationStore } from '../stores/navigation-store';
+import { useCurrentPage } from './use-current-page';
 
-export function usePageRestoration(page: Page, preferences: AppPreferences) {
+/** Restores scroll and cached page data when history moves; returns the scrolling element ref. */
+export function usePageRestoration() {
   const client = useQueryClient();
+  const page = useCurrentPage();
+  const view = useNavigationStore((state) => state.preferences.view);
   const content = useRef<HTMLDivElement>(null);
   const scrollPositions = useRef(new Map<number, number>());
   const navigationCache = useRef(new Map<number, { key: QueryKey; data: unknown }>());
+
+  // History changes notify synchronously, before React replaces the page being left.
+  useEffect(
+    () =>
+      useNavigationStore.subscribe((state, previous) => {
+        if (state.pages === previous.pages) return;
+        const transition = pageTransition(previous.pages, state.pages);
+        switch (transition.type) {
+          case 'none':
+            return;
+          case 'reset':
+            scrollPositions.current.clear();
+            navigationCache.current.clear();
+            return;
+          case 'forward': {
+            const { from } = transition;
+            scrollPositions.current.set(from.key, content.current?.scrollTop ?? 0);
+            const key = navigationQueryKey(from, previous.preferences);
+            const data = client.getQueryData(key);
+            if (data) navigationCache.current.set(from.key, { key, data });
+            return;
+          }
+          case 'back': {
+            const cached = navigationCache.current.get(transition.to.key);
+            if (cached && !client.getQueryData(cached.key))
+              client.setQueryData(cached.key, cached.data, { updatedAt: 0 });
+            for (const discarded of transition.discarded) {
+              navigationCache.current.delete(discarded.key);
+              scrollPositions.current.delete(discarded.key);
+            }
+          }
+        }
+      }),
+    [client],
+  );
 
   useLayoutEffect(() => {
     const element = content.current;
@@ -32,32 +71,7 @@ export function usePageRestoration(page: Page, preferences: AppPreferences) {
     element.addEventListener('touchstart', stop, { passive: true });
     element.addEventListener('keydown', stop);
     return stop;
-  }, [page.key, preferences.view]);
+  }, [page.key, view]);
 
-  function savePage() {
-    scrollPositions.current.set(page.key, content.current?.scrollTop ?? 0);
-    const key = navigationQueryKey(page, preferences);
-    const data = client.getQueryData(key);
-    if (data) navigationCache.current.set(page.key, { key, data });
-  }
-
-  function restorePage(key: number) {
-    const cached = navigationCache.current.get(key);
-    if (cached && !client.getQueryData(cached.key))
-      client.setQueryData(cached.key, cached.data, { updatedAt: 0 });
-  }
-
-  function discardPages(pages: Page[]) {
-    for (const discarded of pages) {
-      navigationCache.current.delete(discarded.key);
-      scrollPositions.current.delete(discarded.key);
-    }
-  }
-
-  function clear() {
-    scrollPositions.current.clear();
-    navigationCache.current.clear();
-  }
-
-  return { content, savePage, restorePage, discardPages, clear };
+  return content;
 }

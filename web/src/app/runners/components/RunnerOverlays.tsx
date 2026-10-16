@@ -1,12 +1,25 @@
-import { WelcomeDialog } from '../../../features/runners/dialogs/components/welcome/WelcomeDialog';
+import { useRunnerOperationLocked } from '../../../features/runners/data/hooks/use-runner-operation-locked';
+import { useRunnersLoading } from '../../../features/runners/data/hooks/use-runners-loading';
+import { WelcomeDialog } from '../../../features/runners/dialogs/components/WelcomeDialog';
 import { RunnerMenu } from '../../../features/runners/menu/components/RunnerMenu';
-import { useGitHubSetup } from '../../setup/hooks/use-github-setup';
-import { useRunnerWorkspace } from '../hooks/use-runner-workspace';
+import { useGitHubConnected } from '../../setup/hooks/use-github-connected';
+import { useWelcome } from '../../setup/hooks/use-welcome';
+import { useWelcomeStore } from '../../setup/stores/welcome-store';
+import { useRunnerAction } from '../hooks/use-runner-action';
+import { useRunnerMenu } from '../hooks/use-runner-menu';
+import { useRunnerWorkspaceStore } from '../stores/runner-workspace-store';
 import { RunnerModal } from './RunnerModal';
 
 export function RunnerOverlays() {
-  const { fleet, menu, closeMenu, onAction, openCreate } = useRunnerWorkspace();
-  const { connected, welcome, dismissWelcome } = useGitHubSetup();
+  const locked = useRunnerOperationLocked();
+  const loading = useRunnersLoading();
+  const menu = useRunnerMenu();
+  const closeMenu = useRunnerWorkspaceStore((state) => state.closeMenu);
+  const openCreate = useRunnerWorkspaceStore((state) => state.openCreate);
+  const onAction = useRunnerAction();
+  const connected = useGitHubConnected();
+  const welcome = useWelcome();
+  const dismissWelcome = useWelcomeStore((state) => state.dismissWelcome);
 
   return (
     <>
@@ -15,13 +28,13 @@ export function RunnerOverlays() {
           runner={menu.runner}
           x={menu.x}
           y={menu.y}
-          locked={fleet.locked}
+          locked={locked}
           connected={connected}
           onAction={onAction}
           onClose={closeMenu}
         />
       )}
-      {!!(!fleet.query.isPending && welcome) && (
+      {!!(!loading && welcome) && (
         <WelcomeDialog
           onClose={dismissWelcome}
           onUseToken={() => {

@@ -1,17 +1,22 @@
-import { useQuery } from '@tanstack/react-query';
+import { hashKey, type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import { request } from '../../../../shared/api/client';
 import type { JobLogs } from '../../../../shared/api/types';
 import { useQueryVisible } from '../../../../shared/hooks/use-query-visible';
-import type { ReplayLogs } from '../types/replay-logs';
+import type { JobLogSource } from '../types/job-log-source';
 
-interface JobLogsOptions {
+interface JobLogsOptions extends JobLogSource {
   jobId: number;
-  repository: string;
-  runnerId?: number;
   stepNumber?: number;
-  replay?: ReplayLogs;
 }
+
+/**
+ * Logs each query client's viewers left most recently, kept for a quick return. A step view can
+ * hold two logs at once (the step and the full-job fallback), so a few are kept, not one.
+ */
+const recentlyLeftLogs = new WeakMap<QueryClient, string[]>();
+const KEPT_LEFT_LOGS = 3;
 
 const missingReplayLogs: JobLogs = {
   state: 'pending',
@@ -27,6 +32,8 @@ export function useJobLogs({ jobId, repository, runnerId, stepNumber, replay }: 
   if (stepNumber !== undefined) params.set('step_number', String(stepNumber));
   let path = '/api/activity/job-logs';
   if (runnerId !== undefined) path = `/api/runners/${runnerId}/job-logs`;
+  const client = useQueryClient();
+  const queryHash = hashKey(queryKey);
   const query = useQuery({
     queryKey,
     queryFn: ({ signal }) => request<JobLogs>(`${path}?${params}`, undefined, signal),
@@ -36,8 +43,25 @@ export function useJobLogs({ jobId, repository, runnerId, stepNumber, replay }: 
       return false;
     },
     staleTime: 30_000,
-    gcTime: 0,
+    // Logs can reach 16 MiB and mactions targets 8 GB Macs, so the cache stays small: a log
+    // left within the last minute is shown again while it refreshes, and the effect below
+    // keeps only the few most recently left logs besides those on screen.
+    gcTime: 60_000,
   });
+  useEffect(() => {
+    // Runs after useQuery subscribes; observed logs, including this one, are never removed.
+    const cache = client.getQueryCache();
+    const kept = recentlyLeftLogs.get(client) ?? [];
+    for (const entry of cache.findAll({ queryKey: ['job-logs'] })) {
+      if (entry.getObserversCount()) continue;
+      if (entry.queryHash === queryHash || kept.includes(entry.queryHash)) continue;
+      cache.remove(entry);
+    }
+    return () => {
+      const recent = (recentlyLeftLogs.get(client) ?? []).filter((hash) => hash !== queryHash);
+      recentlyLeftLogs.set(client, [queryHash, ...recent].slice(0, KEPT_LEFT_LOGS));
+    };
+  }, [client, queryHash]);
 
   let data = query.data;
   let error = query.error;

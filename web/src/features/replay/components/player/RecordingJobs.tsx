@@ -1,23 +1,22 @@
+import { useState } from 'react';
+
 import { JobCard } from '../../../actions/jobs/components/card/JobCard';
-import type { CIRecording } from '../../types/recording';
-import type { RecordingPlayerState } from '../../types/recording-player';
+import { useReplayJobLogs } from '../../hooks/use-replay-job-logs';
+import { replayFrameAt, replaySelectedJob } from '../../models/recording-playback';
+import { type CIRecording } from '../../types/recording';
 import { WorkflowGraph } from '../graph/WorkflowGraph';
 
-export function RecordingJobs({
-  frame,
-  selectedJob,
-  setSelectedJobId,
-  at,
-  recording,
-  logs,
-}: {
-  logs: RecordingPlayerState['logs'];
-  frame: RecordingPlayerState['frame'];
-  selectedJob: RecordingPlayerState['selectedJob'];
-  setSelectedJobId: RecordingPlayerState['setSelectedJobId'];
-  at: RecordingPlayerState['at'];
+interface RecordingJobsProps {
   recording: CIRecording;
-}) {
+  at: number;
+}
+
+/** The jobs reported at the current moment, with the selected job's card and recorded logs. */
+export function RecordingJobs({ recording, at }: RecordingJobsProps) {
+  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const frame = replayFrameAt(recording, at);
+  const selectedJob = replaySelectedJob(frame.jobs, selectedJobId);
+  const logs = useReplayJobLogs(recording, selectedJob, at);
   if (frame.jobs.length)
     return (
       <>
@@ -39,7 +38,7 @@ export function RecordingJobs({
       </>
     );
   return (
-    <p className="panel-empty m-0 grid flex-1 place-items-center p-5 text-muted">
+    <p className="m-0 grid flex-1 place-items-center p-5 text-muted">
       No jobs had been reported at this point in the recording.
     </p>
   );

@@ -1,49 +1,27 @@
-import type { ButtonHTMLAttributes } from 'react';
-
 import { cn } from '../../../lib/cn';
-import { RefreshIcon } from '../../icons/actions/RefreshIcon';
-import { IconButton } from './IconButton';
-
-interface RefreshButtonProps {
-  label: string;
-  iconOnly?: boolean;
-  className?: string;
-  iconClassName?: string;
-  disabled?: boolean;
-  onClick: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
-}
+import { RefreshIcon } from '../../icons/RefreshIcon';
 
 export function RefreshButton({
   label,
-  iconOnly = false,
   className,
-  iconClassName,
   disabled,
   onClick,
-}: RefreshButtonProps) {
-  if (iconOnly) {
-    return (
-      <IconButton
-        icon={RefreshIcon}
-        label={label}
-        className={className}
-        iconClassName={iconClassName}
-        disabled={disabled}
-        onClick={onClick}
-      />
-    );
-  }
-
+}: {
+  label: string;
+  className?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
-      className={cn('min-h-7 text-xs', className)}
+      className={cn('min-h-7 text-xs max-md:min-h-10 pointer-coarse:min-h-10', className)}
       aria-label={label}
       title={label}
       disabled={disabled}
       onClick={onClick}
     >
-      <RefreshIcon className={cn('h-3.5 w-3.5', iconClassName)} />
+      <RefreshIcon className="size-3.5" />
       Refresh
     </button>
   );

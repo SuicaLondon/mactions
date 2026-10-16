@@ -1,43 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useConnection } from '../../../features/github/hooks/use-connection';
+import { useWelcomeStore } from '../stores/welcome-store';
 
-const WELCOME_KEY = 'mactions.welcome.v1';
-
-function readDismissed() {
-  try {
-    return localStorage.getItem(WELCOME_KEY) === 'seen';
-  } catch {
-    return false;
-  }
-}
-
-function rememberDismissal() {
-  try {
-    localStorage.setItem(WELCOME_KEY, 'seen');
-  } catch {
-    /* Continue without browser storage. */
-  }
-}
-
-export function useWelcome(connected: boolean, disconnected: boolean) {
-  const [welcomeDismissed, setWelcomeDismissed] = useState(readDismissed);
-  const [setupOpen, setSetupOpen] = useState(false);
-  useEffect(() => {
-    if (connected && !welcomeDismissed) {
-      rememberDismissal();
-      // eslint-disable-next-line react-x/set-state-in-effect -- Persist connection-driven dismissal after the GitHub query resolves.
-      setWelcomeDismissed(true);
-    }
-  }, [connected, welcomeDismissed]);
-
-  function dismissWelcome() {
-    rememberDismissal();
-    setWelcomeDismissed(true);
-    setSetupOpen(false);
-  }
-
-  return {
-    welcome: setupOpen || (!welcomeDismissed && disconnected),
-    setSetupOpen,
-    dismissWelcome,
-  };
+/** Whether the GitHub welcome guide is showing. */
+export function useWelcome() {
+  const connection = useConnection();
+  const disconnected =
+    connection.isSuccess && !connection.data.connected && connection.data.state !== 'unavailable';
+  return useWelcomeStore((state) => state.setupOpen || (!state.dismissed && disconnected));
 }

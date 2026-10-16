@@ -9,13 +9,43 @@
   --color-control: var(--control);
   --color-control-border: var(--control-border);
   --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
   --color-danger: var(--red);
+  --color-danger-fill: var(--danger-fill);
+  --color-warning: var(--warning);
   --color-focus: var(--focus);
   --color-activity-link: var(--activity-link);
   --color-activity-success: var(--activity-success);
   --color-activity-failure: var(--activity-failure);
   --color-activity-running: var(--activity-running);
   --color-activity-hover: var(--activity-hover);
+}
+
+/* Named column templates for grids that need fixed or minimum track widths; use `grid-cols-<name>`.
+   Inline tokens compile into the utility, so unused templates add nothing to the bundle. */
+@theme inline {
+  /* Runner list columns: runner, scope, status, labels, current work, actions. */
+  --grid-template-columns-runners: minmax(--spacing(42.5), 0.8fr) minmax(--spacing(45), 0.9fr)
+    --spacing(27.5) minmax(--spacing(32.5), 0.7fr) minmax(--spacing(60), 1.25fr) --spacing(14);
+  --grid-template-columns-runners-compact: minmax(--spacing(40), 0.8fr)
+    minmax(--spacing(37.5), 0.8fr) --spacing(26.25) minmax(--spacing(50), 1.2fr) --spacing(14);
+  --grid-template-columns-runners-stacked: minmax(--spacing(32.5), 0.8fr) minmax(0, 1.2fr)
+    --spacing(17.5) --spacing(12);
+  /* Touch layouts fit two 40px row actions in the last column. */
+  --grid-template-columns-runners-stacked-touch: minmax(--spacing(32.5), 0.8fr) minmax(0, 1.2fr)
+    --spacing(17.5) --spacing(21.5);
+  --grid-template-columns-runners-narrow: minmax(0, 1fr) --spacing(17.5) --spacing(21.5);
+  /* A run's Jobs sidebar beside its detail. */
+  --grid-template-columns-run-jobs: --spacing(75) minmax(0, 1fr);
+  --grid-template-columns-run-jobs-compact: --spacing(67.5) minmax(0, 1fr);
+  --grid-template-columns-run-jobs-narrow: --spacing(45) minmax(0, 1fr);
+  /* A replayed workflow run's source card beside its job list. */
+  --grid-template-columns-workflow-run: --spacing(47.5) minmax(--spacing(62.5), 1fr);
+  /* A leading icon sized to its content, then fluid content. */
+  --grid-template-columns-leading: auto minmax(0, 1fr);
+  /* Metadata pairs and job cards fill as many columns as fit. */
+  --grid-template-columns-metadata: repeat(auto-fit, minmax(--spacing(36.25), 1fr));
+  --grid-template-columns-cards: repeat(auto-fill, minmax(--spacing(52.5), 1fr));
 }
 
 @layer components {
@@ -29,14 +59,19 @@
     --toolbar: #f3f3f5;
     --inspector: #f8f8fa;
     --text: #252527;
-    --secondary: #737377;
+    /* Muted text keeps at least 4.5:1 on every light surface, including toolbar and inputs. */
+    --secondary: #636368;
     --line: #dedee2;
     --stripe: #f5f5f7;
     --control: #fff;
     --control-border: #00000024;
-    --accent: #007aff;
+    /* System blue darkened for AA: 5.3:1 for 12px links on white and for white button labels. */
+    --accent: #0068d9;
+    --accent-fill: #0068d9;
     --selection: #086bd9;
     --red: #c63532;
+    --danger-fill: #c63532;
+    --warning: #f59e0b;
     --focus: #007aff70;
   }
   @variant dark {
@@ -46,29 +81,37 @@
       --toolbar: #2b2b2d;
       --inspector: #252527;
       --text: #eeeeef;
-      --secondary: #a3a3a9;
+      --secondary: #b4b4ba;
       --line: #ffffff13;
       --stripe: #ffffff04;
       --control: #444446;
       --control-border: #ffffff13;
-      --accent: #0a84ff;
+      /* Lighter blue for text on dark surfaces; a deeper fill keeps white button labels readable. */
+      --accent: #3d9bff;
+      --accent-fill: #0066d6;
       --selection: #185ea7;
-      --red: #ff736a;
+      /* Light enough for 4.5:1 on dark control faces; fills keep a deeper red for white labels. */
+      --red: #ff9a92;
+      --danger-fill: #c63532;
     }
   }
 }
 
 @layer activity {
-  .execution-shell {
-    --activity-link: #0969da;
-    --activity-success: #1a7f37;
-    --activity-running: #9a6700;
-    --activity-failure: #cf222e;
+  /* At the root as well, so dialogs and toasts rendered outside the app shell get status colors. */
+  :root,
+  [data-execution-shell] {
+    /* Links share the app accent so runner and run links use one blue per theme. */
+    --activity-link: var(--accent);
+    --activity-success: #116329;
+    --activity-running: #7d4e00;
+    --activity-failure: #b62324;
     --activity-hover: color-mix(in srgb, var(--accent) 5%, var(--surface));
   }
 }
 
-@utility bg-grid-dots {
+/* Not named bg-*: cn treats an unknown bg-* utility as a colour and drops the bg-canvas beside it. */
+@utility graph-grid {
   background-image: radial-gradient(var(--line) 1px, transparent 1px);
   background-size: --spacing(4) --spacing(4);
 }

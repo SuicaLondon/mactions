@@ -207,5 +207,4 @@ fn capture_code(mut pipe: Box<dyn Read + Send>, shared: Arc<Mutex<LoginState>>, 
 }
 
 #[cfg(test)]
-#[path = "tests/auth.rs"]
 mod tests;

@@ -1,5 +1,3 @@
-import { minutesToSeconds, secondsToMinutes } from 'date-fns';
-
 import { matchesStatus } from '../../shared/models/activity-status';
 import type {
   ActivityRunner,
@@ -35,15 +33,27 @@ export function refreshIntervalSeconds(
   );
 }
 
-export function refreshIntervalLabel(seconds: number) {
-  const rounded = Math.ceil(seconds);
-  let minutes = secondsToMinutes(rounded);
-  // Preserve floor rounding for negative inputs; date-fns truncates toward zero.
-  if (rounded < minutesToSeconds(minutes)) minutes -= 1;
-  const remainder = rounded - minutesToSeconds(minutes);
-  if (!minutes) return `${rounded}s`;
-  if (remainder) return `${minutes}m ${remainder}s`;
-  return `${minutes}m`;
+/**
+ * A polling interval in friendly units: seconds round to 5 s and minutes to whole minutes.
+ * "about" marks a rounded value, such as "about every 2 min" for 128 seconds.
+ */
+export function friendlyRefreshInterval(seconds: number) {
+  let rounded = Math.max(5, Math.round(seconds / 5) * 5);
+  let label = `${rounded} s`;
+  if (rounded >= 60) {
+    const minutes = Math.round(seconds / 60);
+    rounded = minutes * 60;
+    label = `${minutes} min`;
+  }
+  let about = '';
+  if (rounded !== seconds) about = 'about ';
+  return `${about}every ${label}`;
+}
+
+/** The header note for a list that polls less often than every 30 seconds, or null. */
+export function refreshNote(seconds: number) {
+  if (seconds <= 30) return null;
+  return `Updates ${friendlyRefreshInterval(seconds)}`;
 }
 
 export function mergeRunnerPages(pages: ActivityRunners[] = []) {

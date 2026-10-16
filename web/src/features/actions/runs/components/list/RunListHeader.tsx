@@ -1,58 +1,56 @@
+import { type ReactNode } from 'react';
+
 import { cn } from '../../../../../shared/lib/cn';
-import { RefreshButton } from '../../../../../shared/ui/controls/buttons/RefreshButton';
-import { type useRuns } from '../../../data/hooks/use-runs';
-import { refreshIntervalLabel } from '../../../data/models/activity-data';
-import type { WorkflowRun } from '../../../data/types/activity-types';
-import { StatusFilter } from '../../../shared/components/StatusFilter';
-import { RunCount } from './RunCount';
-import { type RunsView } from './RunsView';
+import { InlineLoading } from '../../../../../shared/ui/loading/components/InlineLoading';
 
 export function RunListHeader({
   runnerName,
-  query,
-  runs,
-  refreshSeconds,
-  status,
-  filter,
-  setFilter,
+  countLoading,
+  runCount,
+  refreshNote,
+  children,
 }: {
-  runnerName: Parameters<typeof RunsView>[0]['runnerName'];
-  query: ReturnType<typeof useRuns>['query'];
-  runs: WorkflowRun[];
-  refreshSeconds: ReturnType<typeof useRuns>['refreshIntervalSeconds'];
-  status: Parameters<typeof RunsView>[0]['status'];
-  filter: string;
-  setFilter: React.Dispatch<React.SetStateAction<string>>;
+  runnerName?: string;
+  countLoading: boolean;
+  runCount: number;
+  refreshNote: string | null;
+  /** The list controls, beside the title. */
+  children: ReactNode;
 }) {
-  let title = 'Workflow runs';
-  if (runnerName) title = `Workflow runs for ${runnerName}`;
+  let suffix = '';
+  if (runnerName) suffix = ` for ${runnerName}`;
+  let runUnit = 'runs';
+  if (runCount === 1) runUnit = 'run';
+  let count = (
+    <>
+      {runCount} {runUnit} loaded
+    </>
+  );
+  if (countLoading) count = <InlineLoading label="Loading run count…" className="h-4.5 w-24" />;
   return (
     <header
       className={cn(
-        'activity-view-header mx-0 mt-0 mb-2.5 flex min-h-7.5 items-center',
+        // On phones the reserved status line below Refresh doubles as the gap above the table.
+        'mx-0 mt-0 mb-2.5 flex min-h-7.5 items-start max-md:mb-0',
         'justify-between gap-3',
       )}
     >
-      <div>
-        <p className="view-eyebrow mx-0 mt-1.25 mb-1 text-xs text-muted">GitHub Actions</p>
-        <h2 className="m-0 text-base font-semibold">{title}</h2>
-        <span className="run-list-count mt-1 inline-block text-xs text-muted">
-          <RunCount query={query} runs={runs} />
-        </span>
-        {!!(refreshSeconds > 30) && (
-          <span className="activity-refresh-note mt-1 block text-xs text-muted">
-            Updates every {refreshIntervalLabel(refreshSeconds)}
-          </span>
-        )}
+      {/* Matches the Runners header: the loaded count sits beside the title. */}
+      <div className="min-w-0 flex-1">
+        <div className="flex min-h-7 items-center gap-1.25 max-md:min-h-10">
+          {/* Shows the nav name, matching "Runners"; the accessible name keeps "Workflow runs". */}
+          <h2
+            className="m-0 truncate text-base font-semibold"
+            aria-label={`Workflow runs${suffix}`}
+          >
+            Runs
+            {suffix}
+          </h2>
+          <span className="shrink-0 text-xs whitespace-nowrap text-muted">{count}</span>
+        </div>
+        {!!refreshNote && <span className="mt-1 block text-xs text-muted">{refreshNote}</span>}
       </div>
-      <div className="activity-view-controls flex items-center gap-2.5">
-        {!!(status === undefined) && <StatusFilter value={filter} onChange={setFilter} />}
-        <RefreshButton
-          label="Refresh runs"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        />
-      </div>
+      {children}
     </header>
   );
 }

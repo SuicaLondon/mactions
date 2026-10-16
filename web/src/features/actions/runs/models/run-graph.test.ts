@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { layoutRunGraph, type RunGraphNode } from './run-graph';
+import { makeJobSummary } from '../../../../test/activity-fixtures';
+import {
+  graphDependencyLabels,
+  graphLevels,
+  graphNodeLabel,
+  graphPositionLabel,
+  graphScrollTargets,
+  layoutRunGraph,
+  type RunGraphNode,
+} from './run-graph';
 
 const node = (id: string, needs: string[] = []): RunGraphNode => ({
   id,
@@ -71,25 +80,13 @@ describe('source-defined pipeline layout', () => {
     const intermediate = layout.positions.filter((position) =>
       ['build', 'test'].includes(position.node.id),
     );
-    for (let index = 1; index < route.length; index++) {
-      const start = route[index - 1];
-      const end = route[index];
-      for (const obstacle of intermediate) {
-        let crosses: boolean;
-        if (start.x === end.x) {
-          crosses =
-            start.x > obstacle.x &&
-            start.x < obstacle.x + obstacle.width &&
-            Math.max(start.y, end.y) > obstacle.y &&
-            Math.min(start.y, end.y) < obstacle.y + obstacle.height;
-        } else {
-          crosses =
-            start.y > obstacle.y &&
-            start.y < obstacle.y + obstacle.height &&
-            Math.max(start.x, end.x) > obstacle.x &&
-            Math.min(start.x, end.x) < obstacle.x + obstacle.width;
-        }
-        expect(crosses).toBe(false);
+    for (const [start, end] of route.slice(1).map((point, index) => [route[index], point])) {
+      for (const box of intermediate) {
+        const overlapsX =
+          Math.max(start.x, end.x) > box.x && Math.min(start.x, end.x) < box.x + box.width;
+        const overlapsY =
+          Math.max(start.y, end.y) > box.y && Math.min(start.y, end.y) < box.y + box.height;
+        expect(overlapsX && overlapsY).toBe(false);
       }
     }
     const source = layout.positions.find((position) => position.node.id === 'prepare')!;
@@ -99,5 +96,44 @@ describe('source-defined pipeline layout', () => {
     expect(
       layout.edges.filter((edge) => edge !== direct).every((edge) => edge.route === undefined),
     ).toBe(true);
+  });
+});
+
+describe('graph labels', () => {
+  it('names nodes without unevaluated expressions', () => {
+    expect(graphNodeLabel({ ...node('build'), name: 'Build app' })).toBe('Build app');
+    expect(graphNodeLabel({ ...node('test'), name: 'Test ${{ matrix.os }}' })).toBe('test');
+    expect(graphNodeLabel({ ...node('lint'), name: '' })).toBe('lint');
+  });
+
+  it('names the dependencies of a positioned node', () => {
+    const nodes = [{ ...node('build'), name: 'Build app' }, node('test', ['build', 'gone'])];
+    expect(graphPositionLabel(nodes[0], nodes)).toBe('Build app, no dependencies');
+    expect(graphPositionLabel(nodes[1], nodes)).toBe('test, depends on Build app, gone');
+    expect(graphDependencyLabels(nodes[1], nodes)).toEqual(['Build app', 'gone']);
+  });
+});
+
+describe('graphLevels', () => {
+  it('groups nodes by dependency level in order, top to bottom within a level', () => {
+    const layout = layoutRunGraph([
+      node('deploy', ['test', 'lint']),
+      node('lint', ['build']),
+      node('build'),
+      node('test', ['build']),
+    ]);
+    const levels = graphLevels(layout).map((level) => level.map((position) => position.node.id));
+    expect(levels).toEqual([['build'], ['lint', 'test'], ['deploy']]);
+  });
+});
+
+describe('graphScrollTargets', () => {
+  it('targets the first failed node and the root column', () => {
+    const layout = layoutRunGraph([node('build'), node('test', ['build'])]);
+    const failed = makeJobSummary({ name: 'test', conclusion: 'failure' });
+    const targets = graphScrollTargets(layout, new Map([['test', [failed]]]));
+    expect(targets.failure?.node.id).toBe('test');
+    expect(targets.root?.node.id).toBe('build');
+    expect(graphScrollTargets(layout, new Map()).failure).toBeUndefined();
   });
 });

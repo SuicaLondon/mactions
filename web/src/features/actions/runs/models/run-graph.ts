@@ -1,4 +1,5 @@
 import type { JobSummary } from '../../data/types/activity-types';
+import { isFailed } from '../../shared/models/activity-status';
 
 export interface RunGraphNode {
   id: string;
@@ -32,11 +33,80 @@ export interface GraphPosition {
   layer: number;
 }
 
+export interface GraphEdge {
+  from: string;
+  to: string;
+  /** The explicit route of a skip-level edge; adjacent layers use a plain curve. */
+  route: RoutePoint[] | undefined;
+  path: string;
+}
+
+/** Positioned nodes and edges for the dependency graph. */
+export interface RunGraphLayout {
+  positions: GraphPosition[];
+  edges: GraphEdge[];
+  width: number;
+  height: number;
+  /** Declared nodes whose dependencies are missing or cyclic. */
+  unresolved: RunGraphNode[];
+}
+
+/** Matched executions for each declared node, keyed by node id. */
+export type RunGraphMembers = Map<string, JobSummary[]>;
+
+/** A run's graph with its executions matched to declared nodes and laid out. */
+export interface RunGraphGeometry {
+  nodes: RunGraphNode[];
+  members: RunGraphMembers;
+  layout: RunGraphLayout;
+  /** Executions no declared node accounts for. */
+  unmapped: JobSummary[];
+}
+
+/** A node's display name; unevaluated expressions fall back to the job id. */
+export function graphNodeLabel(node: RunGraphNode) {
+  if (node.name.includes('${{')) return node.id;
+  return node.name || node.id;
+}
+
+/** The display names of the nodes a node depends on; unknown ids name themselves. */
+export function graphDependencyLabels(node: RunGraphNode, nodes: RunGraphNode[]) {
+  return node.needs.map((id) => {
+    const dependency = nodes.find((candidate) => candidate.id === id);
+    if (dependency) return graphNodeLabel(dependency);
+    return id;
+  });
+}
+
+/** The accessible label of a positioned node, naming the nodes it depends on. */
+export function graphPositionLabel(node: RunGraphNode, nodes: RunGraphNode[]) {
+  if (!node.needs.length) return `${graphNodeLabel(node)}, no dependencies`;
+  return `${graphNodeLabel(node)}, depends on ${graphDependencyLabels(node, nodes).join(', ')}`;
+}
+
+/** Positioned nodes grouped by dependency level, top to bottom within each level. */
+export function graphLevels(layout: RunGraphLayout) {
+  const levels = new Map<number, GraphPosition[]>();
+  for (const position of layout.positions)
+    levels.set(position.layer, [...(levels.get(position.layer) ?? []), position]);
+  return [...levels.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, positions]) => [...positions].sort((left, right) => left.y - right.y));
+}
+
+/** Where the viewport scrolls on load: the first failed node, else the root column. */
+export function graphScrollTargets(layout: RunGraphLayout, members: RunGraphMembers) {
+  return {
+    failure: layout.positions.find((position) => members.get(position.node.id)?.some(isFailed)),
+    root: layout.positions.find((position) => position.layer === 0),
+  };
+}
+
 export function prepareRunGraphLayout(
   graph: RunGraphData,
   jobs: JobSummary[],
   expanded: ReadonlySet<string>,
-) {
+): RunGraphGeometry {
   const nodes = graph.nodes ?? [];
   const byJobId = new Map(jobs.map((job) => [job.id, job]));
   const members = new Map(
@@ -66,7 +136,7 @@ export function prepareRunGraphLayout(
   return { nodes, members, layout, unmapped };
 }
 
-interface RoutePoint {
+export interface RoutePoint {
   x: number;
   y: number;
 }
@@ -95,7 +165,10 @@ function roundedRoute(points: RoutePoint[]) {
 }
 
 /** Position only source-declared dependencies; runtime order never determines edges. */
-export function layoutRunGraph(nodes: RunGraphNode[], heights: Record<string, number> = {}) {
+export function layoutRunGraph(
+  nodes: RunGraphNode[],
+  heights: Record<string, number> = {},
+): RunGraphLayout {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const pending = new Map(nodes.map((node) => [node.id, new Set(node.needs).size]));
   const children = new Map<string, string[]>();
@@ -167,14 +240,8 @@ export function layoutRunGraph(nodes: RunGraphNode[], heights: Record<string, nu
         ];
         path = roundedRoute(route);
       }
-      return [
-        {
-          from: need,
-          to: target.node.id,
-          route,
-          path,
-        },
-      ];
+      const edge: GraphEdge = { from: need, to: target.node.id, route, path };
+      return [edge];
     }),
   );
   return {

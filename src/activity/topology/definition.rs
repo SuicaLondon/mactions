@@ -43,6 +43,8 @@ pub(super) struct Node {
 
 enum Matcher {
     Names(Vec<String>),
+    /// Literal segments of a name whose expressions are unknown; each gap matches non-empty text.
+    Pattern(Vec<String>),
     Matrix {
         base: String,
         values: Vec<Vec<String>>,
@@ -53,6 +55,7 @@ impl Matcher {
     fn matches(&self, name: &str) -> bool {
         match self {
             Self::Names(names) => names.iter().any(|candidate| candidate == name),
+            Self::Pattern(parts) => pattern_matches(parts, name),
             Self::Matrix { base, values } => {
                 let Some(suffix) = name
                     .strip_prefix(&format!("{base} ("))
@@ -153,7 +156,9 @@ pub(super) fn graph(yaml: &str, jobs: &[Value]) -> Result<(Vec<Node>, Vec<u64>, 
         });
         matchers.push(matcher(id, job).filter(|matcher| {
             let bytes = match matcher {
-                Matcher::Names(names) => names.iter().map(String::len).sum::<usize>(),
+                Matcher::Names(names) | Matcher::Pattern(names) => {
+                    names.iter().map(String::len).sum::<usize>()
+                }
                 Matcher::Matrix { base, values } => {
                     base.len() + values.iter().flatten().map(String::len).sum::<usize>()
                 }
@@ -243,24 +248,42 @@ fn scalar(value: &Value) -> Option<String> {
 }
 
 fn matcher(id: &str, job: &JobDefinition) -> Option<Matcher> {
-    if job.uses.is_some() {
+    let name = job.name.as_deref().unwrap_or(id);
+    if name.len() > MAX_NAME_BYTES {
         return None;
+    }
+    if job.uses.is_some() {
+        // GitHub names reusable workflow jobs "<caller name> / <called job name>".
+        let mut parts = template_parts(name)?;
+        parts.last_mut()?.push_str(" / ");
+        parts.push(String::new());
+        return pattern(parts);
     }
     let Some(strategy) = job
         .strategy
         .as_ref()
         .filter(|strategy| !strategy.matrix.is_null())
     else {
-        let name = job.name.as_deref().unwrap_or(id);
-        return (name.len() <= MAX_NAME_BYTES && !name.contains("${{"))
-            .then(|| Matcher::Names(vec![name.into()]));
+        if !name.contains("${{") {
+            return Some(Matcher::Names(vec![name.into()]));
+        }
+        return pattern(template_parts(name)?);
     };
-    let rows = expand_matrix(&strategy.matrix)?;
+    let Some(rows) = expand_matrix(&strategy.matrix) else {
+        // A runtime matrix keeps the static text of its name template.
+        if let Some(template) = &job.name {
+            return pattern(template_parts(template)?);
+        }
+        return pattern(vec![format!("{id} ("), ")".into()]);
+    };
     if let Some(template) = &job.name {
-        let names = rows
+        let Some(names) = rows
             .iter()
             .map(|row| render_name(template, row))
-            .collect::<Option<Vec<_>>>()?;
+            .collect::<Option<Vec<_>>>()
+        else {
+            return pattern(template_parts(template)?);
+        };
         return Some(Matcher::Names(names));
     }
     let values = rows
@@ -284,6 +307,52 @@ fn matcher(id: &str, job: &JobDefinition) -> Option<Matcher> {
         base: id.into(),
         values,
     })
+}
+
+/// Splits a name template into the literal text around its `${{ }}` expressions.
+fn template_parts(template: &str) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut rest = template;
+    while let Some((prefix, expression)) = rest.split_once("${{") {
+        parts.push(prefix.to_string());
+        rest = expression.split_once("}}")?.1;
+    }
+    parts.push(rest.to_string());
+    Some(parts)
+}
+
+/// A name made only of expressions could equal any job name, so it stays unresolved.
+fn pattern(parts: Vec<String>) -> Option<Matcher> {
+    let literal = parts.iter().map(|part| part.trim().len()).sum::<usize>();
+    (literal > 0).then_some(Matcher::Pattern(parts))
+}
+
+fn pattern_matches(parts: &[String], name: &str) -> bool {
+    let (Some(first), Some(last)) = (parts.first(), parts.last()) else {
+        return false;
+    };
+    if parts.len() == 1 {
+        return name == first;
+    }
+    let Some(mut rest) = name.strip_prefix(first.as_str()) else {
+        return false;
+    };
+    let Some(body) = rest.strip_suffix(last.as_str()) else {
+        return false;
+    };
+    rest = body;
+    for part in &parts[1..parts.len() - 1] {
+        // Each gap holds at least one character, which may span several bytes, before the next
+        // literal segment.
+        let Some(gap) = rest.chars().next().map(char::len_utf8) else {
+            return false;
+        };
+        let Some(index) = rest[gap..].find(part.as_str()) else {
+            return false;
+        };
+        rest = &rest[gap + index + part.len()..];
+    }
+    !rest.is_empty()
 }
 
 fn render_name(template: &str, row: &Map<String, Value>) -> Option<String> {

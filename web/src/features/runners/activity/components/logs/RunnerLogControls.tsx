@@ -1,18 +1,59 @@
+import type { LogSnapshot } from '../../../../../shared/api/types';
 import { cn } from '../../../../../shared/lib/cn';
 import { SelectControl } from '../../../../../shared/ui/controls/select/components/SelectControl';
-import { WrapIcon } from '../../../../../shared/ui/icons/actions/WrapIcon';
-import { ChevronIcon } from '../../../../../shared/ui/icons/navigation/ChevronIcon';
-import { PauseIcon } from '../../../../../shared/ui/icons/playback/PauseIcon';
-import { PlayIcon } from '../../../../../shared/ui/icons/playback/PlayIcon';
-import type { RunnerActivityState } from '../../models/runner-activity';
+import { UpdateFailedIndicator } from '../../../../../shared/ui/feedback/components/UpdateFailedIndicator';
+import { ChevronIcon } from '../../../../../shared/ui/icons/ChevronIcon';
+import { PauseIcon } from '../../../../../shared/ui/icons/PauseIcon';
+import { PlayIcon } from '../../../../../shared/ui/icons/PlayIcon';
+import { WrapIcon } from '../../../../../shared/ui/icons/WrapIcon';
+import type { RunnerActivityLayout } from '../../models/runner-activity';
+import { runnerLogFileOptions, type RunnerLogView } from '../../models/runner-log-view';
+import { LogToggle } from './LogToggle';
+
+// The page sets the controls in a toolbar joined to the output below.
+const controlsClasses: Record<RunnerActivityLayout, string> = {
+  panel: 'mb-3 gap-2 px-2',
+  page: 'shrink-0 gap-1.5 rounded-t-md border border-b-0 border-line bg-toolbar p-2',
+};
+
+const fileClasses: Record<RunnerActivityLayout, string> = {
+  panel: '',
+  page: '@max-2xl/activity-main:basis-full',
+};
+
+const fileSelectClasses: Record<RunnerActivityLayout, string> = {
+  panel: '',
+  page: '@max-2xl/activity-main:max-w-none',
+};
+
+// The panel's plain buttons mark live updates in the success color; the page tints every toggle.
+const liveToggleClasses: Record<RunnerActivityLayout, string> = {
+  panel: 'aria-pressed:text-activity-success',
+  page: '',
+};
 
 interface RunnerLogControlsProps {
-  logsOnly: boolean;
-  activity: RunnerActivityState;
+  layout: RunnerActivityLayout;
+  /** The runner's log files; unknown until logs first load. */
+  files: LogSnapshot['files'] | undefined;
+  /** A failed live poll while the last output stays on screen. */
+  refreshError: Error | null;
+  retrying: boolean;
+  onRetry: () => void;
+  view: RunnerLogView;
+  onViewChange: (change: Partial<RunnerLogView>) => void;
 }
 
-export function RunnerLogControls({ logsOnly, activity }: RunnerLogControlsProps) {
-  const { file, setFile, logs, live, setLive, follow, setFollow, wrap, setWrap } = activity;
+export function RunnerLogControls({
+  layout,
+  files,
+  refreshError,
+  retrying,
+  onRetry,
+  view,
+  onViewChange,
+}: RunnerLogControlsProps) {
+  const { file, live, follow, wrap } = view;
   let LiveUpdatesIcon = PlayIcon;
   let liveAction = 'Resume live updates';
   let liveLabel = 'Updates paused';
@@ -22,94 +63,56 @@ export function RunnerLogControls({ logsOnly, activity }: RunnerLogControlsProps
     liveLabel = 'Live updates';
   }
   return (
-    <div
-      className={cn('log-controls mb-3 flex flex-wrap items-center gap-2 px-2 text-xs text-muted', {
-        'm-0 flex shrink-0 flex-wrap items-center gap-1.5 rounded-t-md border border-b-0': logsOnly,
-        'border-line bg-toolbar p-2': logsOnly,
-      })}
-    >
+    <div className={cn('flex flex-wrap items-center text-xs text-muted', controlsClasses[layout])}>
       <div
         className={cn(
-          'diagnostic-file-field flex min-w-0 flex-1 items-center gap-1.75 text-xs',
-          'text-muted',
-          {
-            '@max-2xl/activity-main:basis-full': logsOnly,
-          },
+          'flex min-w-0 flex-1 items-center gap-1.75 text-xs text-muted',
+          fileClasses[layout],
         )}
       >
         <span>Log file</span>
         <SelectControl
           id="log-file"
           label="Log file"
-          className={cn('diagnostic-file-select relative flex max-w-90 min-w-0 flex-1', {
-            '@max-2xl/activity-main:max-w-none': logsOnly,
-          })}
-          embedded={false}
+          className={cn('relative flex max-w-90 min-w-0 flex-1', fileSelectClasses[layout])}
+          variant="toolbar"
           value={file}
-          onChange={setFile}
-          options={[
-            { value: '', label: 'Latest runner log' },
-            ...(logs.data?.files.map((item) => ({
-              value: item.name,
-              label: item.name,
-            })) ?? []),
-          ]}
+          onChange={(value) => onViewChange({ file: value })}
+          options={runnerLogFileOptions(files)}
         />
       </div>
-      <button
-        className={cn('log-live text-xs aria-pressed:text-activity-success', {
-          'h-7.5 min-h-7.5 rounded-sm border border-control-border bg-surface py-1 text-xs':
-            logsOnly,
-          'whitespace-nowrap text-muted shadow-none aria-pressed:border-accent/40': logsOnly,
-          'aria-pressed:bg-accent/10 aria-pressed:text-foreground': logsOnly,
-        })}
-        aria-label={liveAction}
-        aria-pressed={live}
-        onClick={() => setLive((v) => !v)}
+      {/* Reserved even without an error, so a failed live poll never moves the controls. */}
+      <UpdateFailedIndicator error={refreshError} retrying={retrying} onRetry={onRetry} />
+      <LogToggle
+        layout={layout}
+        label={liveAction}
+        pressed={live}
+        icon={LiveUpdatesIcon}
+        iconClassName="size-3"
+        className={liveToggleClasses[layout]}
+        onToggle={() => onViewChange({ live: !live })}
       >
-        <LiveUpdatesIcon
-          className={cn('size-3', {
-            'size-3.25': logsOnly,
-          })}
-        />
         {liveLabel}
-      </button>
-      <button
-        className={cn('log-toggle text-xs', {
-          'h-7.5 min-h-7.5 rounded-sm border border-control-border bg-surface py-1 text-xs':
-            logsOnly,
-          'whitespace-nowrap text-muted shadow-none aria-pressed:border-accent/40': logsOnly,
-          'aria-pressed:bg-accent/10 aria-pressed:text-foreground': logsOnly,
-        })}
-        aria-label="Follow output"
-        aria-pressed={follow}
-        onClick={() => setFollow((value) => !value)}
+      </LogToggle>
+      <LogToggle
+        layout={layout}
+        label="Follow output"
+        pressed={follow}
+        icon={ChevronIcon}
+        iconClassName="rotate-90"
+        onToggle={() => onViewChange({ follow: !follow })}
       >
-        <ChevronIcon
-          className={cn('rotate-90', {
-            'size-3.25': logsOnly,
-          })}
-        />
         Follow output
-      </button>
-      <button
-        className={cn('log-toggle text-xs', {
-          'h-7.5 min-h-7.5 rounded-sm border border-control-border bg-surface py-1 text-xs':
-            logsOnly,
-          'whitespace-nowrap text-muted shadow-none aria-pressed:border-accent/40': logsOnly,
-          'aria-pressed:bg-accent/10 aria-pressed:text-foreground': logsOnly,
-        })}
-        aria-label="Wrap lines"
-        aria-pressed={wrap}
-        onClick={() => setWrap((value) => !value)}
+      </LogToggle>
+      <LogToggle
+        layout={layout}
+        label="Wrap lines"
+        pressed={wrap}
+        icon={WrapIcon}
+        onToggle={() => onViewChange({ wrap: !wrap })}
       >
-        <WrapIcon
-          className={cn({
-            'size-3.25': logsOnly,
-          })}
-        />
         Wrap lines
-      </button>
+      </LogToggle>
     </div>
   );
 }

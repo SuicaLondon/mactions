@@ -9,7 +9,7 @@ export function RunnerRowScope({ target, scopeLabel }: RunnerRowScopeProps) {
     <div
       className={cn(
         cn(
-          'runner-grid-scope flex flex-col gap-0.5 @max-3xl:col-start-2',
+          'flex flex-col gap-0.5 @max-3xl:col-start-2',
           '@max-3xl:col-end-auto @max-3xl:row-start-1 @max-3xl:row-end-auto',
           '@max-md:col-start-1 @max-md:col-end-auto @max-md:row-start-2',
           '@max-md:row-end-auto @max-md:pl-8',
@@ -20,7 +20,7 @@ export function RunnerRowScope({ target, scopeLabel }: RunnerRowScopeProps) {
     >
       <span
         className={cn(
-          'runner-target overflow-hidden text-xs leading-4.5 text-ellipsis',
+          'overflow-hidden text-xs/4.5 text-ellipsis',
           'whitespace-nowrap text-foreground',
         )}
         title={target?.name}
@@ -30,7 +30,7 @@ export function RunnerRowScope({ target, scopeLabel }: RunnerRowScopeProps) {
       {!!target && (
         <span
           className={cn(
-            'runner-scope-kind overflow-hidden text-xs leading-4 text-ellipsis',
+            'overflow-hidden text-xs/4 text-ellipsis',
             'whitespace-nowrap text-muted @max-3xl:hidden',
           )}
         >

@@ -15,7 +15,7 @@ export function ManualRunnerTarget({
   valid,
 }: ManualRunnerTargetProps) {
   let targetLabel = 'Organization';
-  let placeholder = 'organization…';
+  let placeholder = 'Organization name…';
   let hint = 'Enter the organization name. You can also paste its GitHub URL.';
   let validationMessage = 'Use the organization name for an organization.';
   if (kind === 'repo') {
@@ -25,7 +25,7 @@ export function ManualRunnerTarget({
     validationMessage = 'Use owner/repository for a repository.';
   }
   return (
-    <div className="create-fields mt-4 flex flex-col gap-2 text-xs">
+    <div className="mt-4 flex flex-col gap-2 text-xs">
       <label htmlFor="target-name" className="mt-1.25 font-medium">
         {targetLabel}
       </label>
@@ -41,11 +41,11 @@ export function ManualRunnerTarget({
         required
         aria-describedby="target-hint"
       />
-      <p id="target-hint" className="detail-help m-0 text-xs leading-normal text-muted">
+      <p id="target-hint" className="m-0 text-xs/normal text-muted">
         {hint}
       </p>
       {!!(target.trim() && !valid) && (
-        <p className="field-error m-0 text-xs text-danger">{validationMessage}</p>
+        <p className="m-0 text-xs text-danger">{validationMessage}</p>
       )}
     </div>
   );

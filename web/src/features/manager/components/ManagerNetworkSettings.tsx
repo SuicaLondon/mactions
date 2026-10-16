@@ -1,26 +1,42 @@
 import { useState } from 'react';
 
-import type { useManagerSettings } from '../hooks/use-manager-settings';
+import { cn } from '../../../shared/lib/cn';
+import { PendingLabel } from '../../../shared/ui/controls/buttons/PendingLabel';
+import { ClampedMessage } from '../../../shared/ui/feedback/components/ClampedMessage';
+import { useManagerSettingsSave } from '../hooks/use-manager-settings-save';
+import { awaitsManagerRestart, isRemoteDashboard } from '../models/manager-network';
 import type { ManagerSettings } from '../types/manager';
+import { ManagerNetworkStatus } from './ManagerNetworkStatus';
 
-export function ManagerNetworkSettings({
-  settings,
-  data,
-  disabled,
-}: {
-  settings: ReturnType<typeof useManagerSettings>;
+interface ManagerNetworkSettingsProps {
   data: ManagerSettings;
   disabled: boolean;
-}) {
+  restartStalled: boolean;
+}
+
+export function ManagerNetworkSettings({
+  data,
+  disabled,
+  restartStalled,
+}: ManagerNetworkSettingsProps) {
   const [draft, setDraft] = useState<boolean | null>(null);
   const lanAccess = draft ?? data.lan_access;
-  const { save, restarting, health, remote } = settings;
+  const save = useManagerSettingsSave();
+  const remote = isRemoteDashboard(window.location.hostname);
+  const restarting = awaitsManagerRestart(save.data, remote);
   const disconnects = remote && data.lan_access && !lanAccess;
   let restartMessage = 'Saving restarts the manager dashboard. Runners continue running.';
   if (!data.managed)
-    restartMessage = 'Restart the manager manually after saving. Runners continue running.';
+    restartMessage =
+      'After saving, restart the manager: stop mactions serve with Ctrl-C and run it again. Runners continue running.';
+  // Shares the restart line, so toggling the checkbox never inserts a paragraph.
+  if (disconnects)
+    restartMessage =
+      'Saving closes this connection. Open mactions on the Mac to reach the dashboard again.';
+  let busyLabel = 'Saving…';
+  if (restarting) busyLabel = 'Restarting…';
   return (
-    <section className="mt-5" aria-labelledby="manager-network-title">
+    <section className="mt-4" aria-labelledby="manager-network-title">
       <h3 id="manager-network-title" className="m-0 text-xs font-semibold">
         Network access
       </h3>
@@ -41,53 +57,40 @@ export function ManagerNetworkSettings({
           />
           Allow access from other devices
         </label>
-        <p className="my-2 text-xs leading-relaxed text-muted">
-          By default, only this Mac can open the dashboard. Other devices on your network receive
-          full management access, including runner control and GitHub authorization.
+        <div
+          className={cn(
+            'my-3 rounded-md border border-warning/30 bg-warning/8 px-3 py-2.5 text-xs',
+            'leading-relaxed text-foreground',
+          )}
+        >
+          <strong className="font-semibold">There is no dashboard login.</strong> By default, only
+          this Mac can open the dashboard. With this on, anyone on your network can control runners
+          and start GitHub authorization with this Mac's account.
+        </div>
+        <p
+          role="status"
+          className={cn('my-2 min-h-9 text-xs/relaxed', {
+            'text-foreground': disconnects,
+            'text-muted': !disconnects,
+          })}
+        >
+          {restartMessage}
         </p>
-        <p className="my-2 text-xs leading-relaxed text-muted">{restartMessage}</p>
-        {disconnects && (
-          <p role="status" className="my-2 text-xs text-foreground">
-            This connection will close. Open mactions on the Mac to access the dashboard again.
-          </p>
-        )}
         <button
           type="submit"
           disabled={disabled || save.isPending || restarting || lanAccess === data.lan_access}
         >
-          Save network settings
+          <PendingLabel
+            pending={save.isPending || restarting}
+            idle="Save network settings"
+            busy={busyLabel}
+          />
         </button>
-        {save.isError && (
-          <p role="alert" className="mb-0 text-xs text-danger">
-            {save.error.message}
-          </p>
-        )}
-        {save.isSuccess && !data.managed && (
-          <p role="status" className="mb-0 text-xs text-muted">
-            Settings saved. Restart the manager manually to apply them.
-          </p>
-        )}
-        {save.isSuccess && remote && !data.lan_access && save.data.restart_scheduled && (
-          <p role="status" className="mb-0 text-xs text-muted">
-            Settings saved. Open mactions on the Mac to reconnect.
-          </p>
-        )}
-        {save.isSuccess && data.managed && !save.data.restart_scheduled && (
-          <p role="status" className="mb-0 text-xs text-muted">
-            Settings saved. No additional restart is needed.
-          </p>
-        )}
-        {restarting && health.errorUpdateCount < 30 && (
-          <p role="status" className="mb-0 text-xs text-muted">
-            Restarting the manager and reconnecting…
-          </p>
-        )}
-        {restarting && health.errorUpdateCount >= 30 && (
-          <p role="alert" className="mb-0 text-xs text-danger">
-            The manager has not finished restarting. Run mactions open on the Mac to check its
-            status.
-          </p>
-        )}
+        {/* Reserves two lines, so a wrapped failure never moves the update section below; longer
+            text gets a Details link. */}
+        <ClampedMessage live className="mt-2" textClassName="text-muted">
+          <ManagerNetworkStatus data={data} restartStalled={restartStalled} />
+        </ClampedMessage>
       </form>
     </section>
   );

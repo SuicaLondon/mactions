@@ -1,63 +1,55 @@
 import type { Action, Runner } from '../../../../shared/api/types';
 import { RunnerAccess } from './access/RunnerAccess';
-import { RunnerConfiguration } from './configuration/RunnerConfiguration';
-import { RunnerDiagnosticLink } from './controls/RunnerDiagnosticLink';
-import { RunnerErrorNotice } from './controls/RunnerErrorNotice';
-import { RunnerRecoveryNote } from './controls/RunnerRecoveryNote';
-import { RunnerRemovalSection } from './controls/RunnerRemovalSection';
-import { RunnerIdentity } from './identity/RunnerIdentity';
-import { RunnerInspectorEmpty } from './identity/RunnerInspectorEmpty';
-import { RunnerLabelsSection } from './labels/RunnerLabelsSection';
+import { RunnerIdentity } from './RunnerIdentity';
+import { RunnerNotice } from './RunnerNotice';
+import { RunnerConfiguration } from './sections/RunnerConfiguration';
+import { RunnerDiagnosticLink } from './sections/RunnerDiagnosticLink';
+import { RunnerLabelsSection } from './sections/RunnerLabelsSection';
+import { RunnerRemovalSection } from './sections/RunnerRemovalSection';
 
 interface RunnerInspectorProps {
-  runner: Runner | undefined;
+  runner: Runner;
   locked: boolean;
   connected: boolean;
+  /** The runner action currently being performed for this runner, if any. */
+  pendingAction: string | null;
   onAction: (runner: Runner, action: Action) => void;
-  onOpenLogs?: () => void;
+  onOpenLogs: () => void;
 }
 
 export function RunnerInspector({
   runner,
   locked,
   connected,
+  pendingAction,
   onAction,
   onOpenLogs,
 }: RunnerInspectorProps) {
-  if (!runner) return <RunnerInspectorEmpty />;
-  const unregistered = !runner.github_id || runner.deregistered;
-  let action: 'start' | 'stop' = 'stop';
-  if (runner.local_status === 'stopped') action = 'start';
-  let githubError: string | null | undefined;
-  if (connected) githubError = runner.github_error;
-  const errors = [runner.error, githubError, runner.local_error].filter((error): error is string =>
-    Boolean(error),
-  );
+  const runAction = (action: Action) => onAction(runner, action);
   return (
     <div id="inspector-content">
       <RunnerIdentity
-        r={runner}
+        runner={runner}
         locked={locked}
-        action={action}
-        unregistered={unregistered}
-        onAction={onAction}
-      />
-      <RunnerRecoveryNote runner={runner} locked={locked} onAction={onAction} />
-      <RunnerErrorNotice errors={errors} />
+        pendingAction={pendingAction}
+        onAction={runAction}
+      >
+        <RunnerNotice runner={runner} connected={connected} locked={locked} onAction={runAction} />
+      </RunnerIdentity>
       <RunnerLabelsSection
         runner={runner}
         locked={locked}
         connected={connected}
-        onAction={onAction}
+        onAction={runAction}
       />
       <RunnerConfiguration runner={runner} />
       <RunnerAccess key={runner.id} runnerId={runner.id} connected={connected} />
-      {!!onOpenLogs && <RunnerDiagnosticLink onOpenLogs={onOpenLogs} />}
+      <RunnerDiagnosticLink onOpenLogs={onOpenLogs} />
       <RunnerRemovalSection
-        runner={runner}
+        deregistered={runner.deregistered}
         locked={locked}
         connected={connected}
-        onAction={onAction}
+        onAction={runAction}
       />
     </div>
   );

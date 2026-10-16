@@ -36,7 +36,7 @@ pub fn run_graph(
         attempt.is_none_or(|number| number == resolved_attempt),
         "GitHub returned a different run attempt"
     );
-    let jobs = run_jobs(manager, &repository, run_id, Some(resolved_attempt), false)?;
+    let jobs = run_jobs(manager, &repository, &raw, Some(resolved_attempt), false)?;
     let mut source = None;
     let result = (|| {
         source = Some(source::resolve(manager, &repository, &raw)?);

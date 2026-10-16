@@ -1,50 +1,21 @@
 import { expect, it } from 'vitest';
 
-import type { JobSummary, WorkflowRun } from '../types/activity-types';
-import { prepareJobHistory, prepareRunList, refreshIntervalLabel } from './activity-data';
+import { makeJobSummary, makeRun } from '../../../../test/activity-fixtures';
+import {
+  friendlyRefreshInterval,
+  prepareJobHistory,
+  prepareRunList,
+  refreshNote,
+} from './activity-data';
 
-const run: WorkflowRun = {
+const run = makeRun({
   id: 1,
-  repository: 'example/app',
-  workflow_id: 8,
-  name: 'CI',
   title: 'Original execution',
-  number: 42,
-  attempt: 1,
   status: 'in_progress',
   conclusion: null,
-  branch: 'main',
-  head_sha: '',
-  url: 'https://github.com/example/app/actions/runs/1',
-  created_at: null,
-  started_at: null,
-  updated_at: null,
-};
-
-const job: JobSummary = {
-  id: 11,
-  name: 'Build',
-  workflow: run.name,
-  repository: run.repository,
-  workflow_id: run.workflow_id,
-  status: run.status,
-  conclusion: run.conclusion,
-  branch: run.branch,
-  run_number: run.number,
-  run_id: run.id,
-  run_attempt: run.attempt,
-  url: `${run.url}/job/11`,
-  runner_id: null,
-  runner_name: null,
-  host_type: 'unknown',
-  device: 'unknown',
-  started_at: null,
-  completed_at: null,
-};
-
-it('keeps floor-based minute labels for negative durations', () => {
-  expect(refreshIntervalLabel(-1)).toBe('-1m 59s');
 });
+
+const job = makeJobSummary({ id: 11, run_id: 1, status: 'in_progress', conclusion: null });
 
 it('keeps the first run before filtering and treats other attempts and repositories separately', () => {
   const duplicate = { ...run, title: 'Needle', status: 'completed', conclusion: 'success' };
@@ -78,4 +49,23 @@ it('keeps historical loaded counts unfiltered and hides later duplicates before 
     jobs: [previous],
     messages: ['Partial results'],
   });
+});
+
+it.each([
+  [30, null],
+  [90, 'Updates about every 2 min'],
+  [128, 'Updates about every 2 min'],
+  [120, 'Updates every 2 min'],
+])('notes a %i s refresh interval as %j', (seconds, note) => {
+  expect(refreshNote(seconds)).toBe(note);
+});
+
+it.each([
+  [30, 'every 30 s'],
+  [43, 'about every 45 s'],
+  [59, 'about every 1 min'],
+  [60, 'every 1 min'],
+  [150, 'about every 3 min'],
+])('rounds a %i s refresh interval to %s', (seconds, label) => {
+  expect(friendlyRefreshInterval(seconds)).toBe(label);
 });

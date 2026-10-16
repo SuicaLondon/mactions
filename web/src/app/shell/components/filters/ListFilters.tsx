@@ -1,76 +1,69 @@
-import { ScopeFilters } from '../../../../features/github/components/scope/ScopeFilters';
+import { ScopeFilters } from '../../../../features/github/components/ScopeFilters';
+import { useLocalRunners } from '../../../../features/runners/data/hooks/use-local-runners';
+import { useRunnersLoading } from '../../../../features/runners/data/hooks/use-runners-loading';
 import { cn } from '../../../../shared/lib/cn';
 import { SelectControl } from '../../../../shared/ui/controls/select/components/SelectControl';
-import { SearchIcon } from '../../../../shared/ui/icons/actions/SearchIcon';
-import { useNavigation } from '../../../navigation/hooks/use-navigation';
-import { useRunnerWorkspace } from '../../../runners/hooks/use-runner-workspace';
-import { useGitHubSetup } from '../../../setup/hooks/use-github-setup';
+import { SearchIcon } from '../../../../shared/ui/icons/SearchIcon';
+import { useCurrentPage } from '../../../navigation/hooks/use-current-page';
+import { isRunsList } from '../../../navigation/models/app-navigation';
+import { useNavigationStore } from '../../../navigation/stores/navigation-store';
+import { useGitHubConnected } from '../../../setup/hooks/use-github-connected';
+import { listFilterCopy } from '../../models/list-filters';
+import { ListFiltersSkeleton } from './ListFiltersSkeleton';
 import { SelectField } from './SelectField';
 
 export function ListFilters() {
-  const { page, preferences, setPreferences, changeScope, runsList } = useNavigation();
-  const { rows } = useRunnerWorkspace();
-  const { connected } = useGitHubSetup();
+  const page = useCurrentPage();
+  const preferences = useNavigationStore((state) => state.preferences);
+  const updatePreferences = useNavigationStore((state) => state.updatePreferences);
+  const changeScope = useNavigationStore((state) => state.changeScope);
+  const rows = useLocalRunners();
+  const starting = useRunnersLoading();
+  const connected = useGitHubConnected();
+  const runsList = isRunsList(page, preferences.view);
+  const showScope = page.type === 'list';
+  if (starting) return <ListFiltersSkeleton runsList={runsList} showScope={showScope} />;
+  const { filterLabel, searchLabel, statusLabel, statusOptions } = listFilterCopy(runsList);
   let search = preferences.runnerSearch;
   let status = preferences.runnerStatus;
-  let filterLabel = 'Runner filters';
-  let searchLabel = 'Search runners';
-  let statusLabel = 'Filter runners';
-  let statusOptions = [
-    { value: 'all', label: 'All runners', muted: true },
-    { value: 'active', label: 'Active' },
-    { value: 'stopped', label: 'Stopped / Offline' },
-    { value: 'attention', label: 'Needs attention' },
-  ];
   if (runsList) {
     search = preferences.runSearch;
     status = preferences.runStatus;
-    filterLabel = 'Run filters';
-    searchLabel = 'Search runs';
-    statusLabel = 'Filter runs';
-    statusOptions = [
-      { value: 'all', label: 'All statuses', muted: true },
-      { value: 'active', label: 'Running and queued' },
-      { value: 'success', label: 'Success' },
-      { value: 'failure', label: 'Failure' },
-      { value: 'cancelled', label: 'Cancelled' },
-      { value: 'skipped', label: 'Skipped' },
-    ];
   }
   function changeSearch(value: string) {
-    setPreferences((previous) => {
-      if (runsList) return { ...previous, runSearch: value };
-      return { ...previous, runnerSearch: value };
-    });
+    if (runsList) updatePreferences({ runSearch: value });
+    else updatePreferences({ runnerSearch: value });
   }
   function changeStatus(value: string) {
-    setPreferences((previous) => {
-      if (runsList) return { ...previous, runStatus: value };
-      return { ...previous, runnerStatus: value };
-    });
+    if (runsList) updatePreferences({ runStatus: value });
+    else updatePreferences({ runnerStatus: value });
   }
   return (
     <section
       className={cn(
-        'list-toolbar flex min-h-13.5 shrink-0 flex-wrap items-center gap-2 border-b',
-        'border-b-line bg-surface px-4 py-2.5 @max-xl/activity-main:grid',
+        'flex min-h-13.5 shrink-0 flex-wrap items-center gap-2 border-b',
+        'border-b-line bg-surface px-4 py-2.5 max-md:px-3 @max-xl/activity-main:grid',
         '@max-xl/activity-main:grid-cols-2',
       )}
       aria-label={filterLabel}
     >
       <label
         className={cn(
-          'search-field list-search flex h-8 max-w-60 min-w-32.5 shrink grow basis-40',
+          'flex h-8 max-w-60 min-w-32.5 shrink grow basis-32',
+          // On touch the input itself is the 40px target, so the bordered field grows around it.
+          'max-md:h-auto pointer-coarse:h-auto',
           'items-center gap-1.25 rounded-md border border-control-border bg-canvas px-2',
           'text-muted focus-within:outline-3 focus-within:outline-offset-1',
           'focus-within:outline-focus @max-xl/activity-main:col-span-2',
           '@max-xl/activity-main:max-w-none @max-xl/activity-main:basis-full',
+          'max-md:min-w-0 max-md:basis-auto',
         )}
       >
         <SearchIcon className="size-3.5" />
         <input
           className={cn(
             'w-full rounded-xs border-0 bg-transparent px-0 py-1 text-xs text-foreground',
+            'max-md:min-h-10 pointer-coarse:min-h-10',
             'outline-none focus-visible:outline-none',
           )}
           type="search"
@@ -82,40 +75,46 @@ export function ListFilters() {
           onChange={(event) => changeSearch(event.target.value)}
         />
       </label>
-      {page.type === 'list' && (
-        <ScopeFilters
-          scope={preferences.scope}
-          runners={rows}
-          connected={connected}
-          onChange={changeScope}
-        />
-      )}
-      <div className="list-toolbar-state contents">
-        <SelectField label="Status">
-          <SelectControl
-            className="filter-choice min-w-0 flex-1"
-            label={statusLabel}
-            value={status}
-            onChange={changeStatus}
-            options={statusOptions}
+      {/* Every control stays in the toolbar; narrow screens wrap them onto two columns. */}
+      <div className="contents">
+        {showScope && (
+          <ScopeFilters
+            scope={preferences.scope}
+            runners={rows}
+            connected={connected}
+            onChange={changeScope}
           />
-        </SelectField>
-        {!runsList && (
-          <SelectField label="Device">
+        )}
+        <div className="contents">
+          {/* Fixed inline widths, so choosing a longer value never moves the next filter. */}
+          <SelectField label="Status" className="@xl/activity-main:w-52">
             <SelectControl
-              className="filter-choice min-w-0 flex-1"
-              label="Filter runner device"
-              value={preferences.device}
-              onChange={(device) => setPreferences((previous) => ({ ...previous, device }))}
-              options={[
-                { value: 'all', label: 'All devices', muted: true },
-                { value: 'this_device', label: 'This device' },
-                { value: 'other_device', label: 'Other devices' },
-                { value: 'unknown', label: 'Device unknown' },
-              ]}
+              className="min-w-0 flex-1"
+              variant="field"
+              label={statusLabel}
+              value={status}
+              onChange={changeStatus}
+              options={statusOptions}
             />
           </SelectField>
-        )}
+          {!runsList && (
+            <SelectField label="Device" className="@xl/activity-main:w-48">
+              <SelectControl
+                className="min-w-0 flex-1"
+                variant="field"
+                label="Runner device"
+                value={preferences.device}
+                onChange={(device) => updatePreferences({ device })}
+                options={[
+                  { value: 'all', label: 'All devices', muted: true },
+                  { value: 'this_device', label: 'This device' },
+                  { value: 'other_device', label: 'Other devices' },
+                  { value: 'unknown', label: 'Device unknown' },
+                ]}
+              />
+            </SelectField>
+          )}
+        </div>
       </div>
     </section>
   );

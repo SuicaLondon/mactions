@@ -1,132 +1,147 @@
-import type { Runner } from '../../../../shared/api/types';
-import { cn } from '../../../../shared/lib/cn';
+import { useMemo } from 'react';
+
 import { RefreshButton } from '../../../../shared/ui/controls/buttons/RefreshButton';
+import { UpdateFailedIndicator } from '../../../../shared/ui/feedback/components/UpdateFailedIndicator';
+import { useRunnerInventory } from '../../../actions/data/hooks/use-runner-inventory';
+import { useRunnerWork } from '../../../actions/data/hooks/use-runner-work';
 import type { ActivityRunner, Scope } from '../../../actions/data/types/activity-types';
-import { useRunnerList } from '../hooks/use-runner-list';
-import { type RunnerSelection } from '../models/runner-list';
-import { RunnerCount } from './RunnerCount';
+import { useRunnerFetching } from '../../data/hooks/use-runner-fetching';
+import { useInventoryUpdates } from '../hooks/use-inventory-updates';
+import { useRunnerRows } from '../hooks/use-runner-rows';
+import { useRunnerWorkState } from '../hooks/use-runner-work-state';
+import { runnerDataAlert } from '../models/runner-data-alert';
+import { runnerDataCoverage } from '../models/runner-data-coverage';
+import { filterRunnerRows, type LocalRunners, type RunnerRowFilters } from '../models/runner-list';
+import { type GitHubConnectionState, isCheckingGitHub } from '../models/runner-list-status';
+import type { RunnerRowCallbacks } from '../models/runner-row';
+import { AddRunnerButton } from './AddRunnerButton';
+import { RunnerListRow } from './row/RunnerListRow';
 import { RunnerDataNotes } from './RunnerDataNotes';
-import { RunnerGridContent } from './RunnerGridContent';
+import { RunnerGrid } from './RunnerGrid';
 import { RunnerListEmpty } from './RunnerListEmpty';
-import { RunnerLoadMoreLabel } from './RunnerLoadMoreLabel';
+import { RunnerListHeader } from './RunnerListHeader';
+import { RunnerLoadMore } from './RunnerLoadMore';
+
+export interface RunnerListProps {
+  scope: Scope;
+  connection: GitHubConnectionState;
+  local: LocalRunners;
+  filters: RunnerRowFilters;
+  /** The row whose details are open. */
+  detailsKey?: string;
+  rowCallbacks: RunnerRowCallbacks;
+  onAdd: () => void;
+  /** Runner operations in progress lock creation. */
+  addDisabled?: boolean;
+  onInventoryUpdate: (runners: ActivityRunner[]) => void;
+}
 
 export function RunnerList({
   scope,
-  runners,
-  connected,
-  search,
-  status,
-  device,
+  connection,
+  local,
+  filters: { search, status, device },
   detailsKey,
-  onOpen,
-  onDetails,
-  onMenu,
+  rowCallbacks: { onOpen, onDetails, onMenu },
   onAdd,
-  onRefreshLocal,
-  localFetching: controlledLocalFetching,
-  localError,
+  addDisabled = false,
   onInventoryUpdate,
-}: {
-  scope: Scope;
-  runners: Runner[];
-  connected: boolean | undefined;
-  search: string;
-  status: string;
-  device: string;
-  detailsKey?: string;
-  onOpen: (runner: RunnerSelection) => void;
-  onDetails: (runner: RunnerSelection) => void;
-  onMenu: (runner: Runner, x: number, y: number) => void;
-  onAdd: () => void;
-  onRefreshLocal: () => void;
-  localFetching?: boolean;
-  localError?: string;
-  onInventoryUpdate: (runners: ActivityRunner[]) => void;
-}) {
-  const {
-    inventory,
-    work,
-    localFetching,
-    rows,
-    awaitingInventory,
-    visible,
-    hasDataNotes,
-    emptyTitle,
-  } = useRunnerList({
+}: RunnerListProps) {
+  const connected = connection === 'connected';
+  const localFetching = useRunnerFetching();
+  const inventory = useRunnerInventory(scope, connected);
+  const work = useRunnerWork(scope, connected);
+  useInventoryUpdates(inventory.runners, onInventoryUpdate);
+  const rows = useRunnerRows({
     scope,
-    runners,
+    runners: local.runners,
     connected,
-    search,
-    status,
-    device,
-    controlledLocalFetching,
-    localError,
-    onInventoryUpdate,
+    inventory: inventory.runners,
+    inventoryReady: inventory.query.isSuccess,
+    inventoryMessage: inventory.message,
+  });
+  const visible = useMemo(
+    () => filterRunnerRows(rows, { search, status, device }),
+    [rows, search, status, device],
+  );
+  const workState = useRunnerWorkState(work.query, connection);
+  const callbacks = useMemo(() => ({ onOpen, onDetails, onMenu }), [onOpen, onDetails, onMenu]);
+  const checkingGitHub = isCheckingGitHub({
+    hasInventory: Boolean(inventory.query.data),
+    inventoryPending: inventory.query.isPending,
+    connection,
+  });
+  const awaitingInventory = checkingGitHub && !rows.length;
+  // A failed next page is reported beside Load more, not as unavailable inventory.
+  let inventoryError = inventory.query.error;
+  let nextPageError: Error | null = null;
+  if (inventory.query.isFetchNextPageError) {
+    nextPageError = inventory.query.error;
+    inventoryError = null;
+  }
+  const workError = work.query.error;
+  const alert = runnerDataAlert(inventoryError, workError);
+  const coverage = runnerDataCoverage({
+    connected,
+    inventoryMessage: inventory.message,
+    workMessage: work.query.data?.message,
+    inventorySeconds: inventory.refreshIntervalSeconds,
+    workSeconds: work.refreshIntervalSeconds,
   });
   return (
-    <section
-      className="runner-list-view @container flex flex-1 flex-col"
-      aria-label="Managed runners"
-    >
-      <header
-        className={cn(
-          'activity-view-header mx-0 mt-0 mb-2.5 flex min-h-7.5 shrink-0 items-center',
-          'justify-between gap-3',
-        )}
-      >
-        <div>
-          <h2 className="m-0 text-base font-semibold">
-            Runners{' '}
-            <span className="ml-1.25 text-xs font-normal text-muted">
-              <RunnerCount awaitingInventory={awaitingInventory} rows={rows} />
-            </span>
-          </h2>
-        </div>
+    <section className="@container flex flex-1 flex-col" aria-label="Managed runners">
+      <RunnerListHeader count={rows.length} countLoading={checkingGitHub}>
+        {/* Always rendered: a failure fills its reserved slot, so the header never grows. */}
+        <UpdateFailedIndicator
+          className="min-w-0 max-md:order-last max-md:basis-full max-md:justify-end"
+          label={alert?.label ?? 'GitHub data unavailable'}
+          error={alert?.error ?? null}
+          retrying={inventory.query.isFetching || work.query.isFetching}
+          onRetry={() => {
+            if (inventoryError) void inventory.query.refetch();
+            if (workError) void work.query.refetch();
+          }}
+        />
         <RefreshButton
-          iconOnly
           label="Refresh runners"
           disabled={localFetching || inventory.query.isFetching || work.query.isFetching}
           onClick={() => {
-            onRefreshLocal();
+            local.onRefresh();
             if (connected) {
               void inventory.query.refetch();
               void work.query.refetch();
             }
           }}
         />
-      </header>
-      <RunnerGridContent
-        awaitingInventory={awaitingInventory}
-        visible={visible}
-        detailsKey={detailsKey}
-        work={work}
-        connected={connected}
-        onOpen={onOpen}
-        onMenu={onMenu}
-        onDetails={onDetails}
-      />
+        <AddRunnerButton disabled={addDisabled} onAdd={onAdd} />
+      </RunnerListHeader>
+      <RunnerGrid loading={awaitingInventory}>
+        {visible.map((row) => (
+          <RunnerListRow
+            key={row.key}
+            row={row}
+            selected={detailsKey === row.key}
+            checkingGitHub={checkingGitHub}
+            work={workState}
+            callbacks={callbacks}
+          />
+        ))}
+      </RunnerGrid>
       {!!(!visible.length && !awaitingInventory) && (
         <RunnerListEmpty
           rowCount={rows.length}
-          localError={localError}
+          local={local}
           localFetching={localFetching}
-          emptyTitle={emptyTitle}
-          onRefreshLocal={onRefreshLocal}
           onAdd={onAdd}
         />
       )}
-      {!!hasDataNotes && (
-        <RunnerDataNotes inventory={inventory} work={work} connected={connected} />
-      )}
-      {!!inventory.query.hasNextPage && (
-        <button
-          className="activity-load-more mx-auto my-3 flex text-xs"
-          disabled={inventory.query.isFetchingNextPage}
-          onClick={() => void inventory.query.fetchNextPage()}
-        >
-          <RunnerLoadMoreLabel inventory={inventory} />
-        </button>
-      )}
+      {!!coverage && <RunnerDataNotes coverage={coverage} />}
+      <RunnerLoadMore
+        hasMore={inventory.query.hasNextPage}
+        loading={inventory.query.isFetchingNextPage}
+        error={nextPageError}
+        onLoadMore={() => void inventory.query.fetchNextPage()}
+      />
     </section>
   );
 }

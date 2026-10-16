@@ -30,18 +30,6 @@
   [tabindex]:focus-visible {
     @apply outline-2 outline-offset-2 outline-focus;
   }
-  button.primary {
-    @apply bg-accent font-medium;
-    border-color: #0000000a;
-    color: #fff;
-  }
-  button.danger {
-    @apply text-danger;
-  }
-  button.primary.danger {
-    @apply bg-danger;
-    color: #fff;
-  }
   svg {
     @apply inline-block h-4.5 w-4.5 flex-none;
     vertical-align: middle;
@@ -105,12 +93,14 @@
     overflow-wrap: anywhere;
   }
   dialog {
-    @apply m-auto w-full max-w-md rounded-xl bg-toolbar p-6 text-foreground;
+    /* Anchored near the top so content growth (errors, progress) extends downward only. */
+    @apply mx-auto mt-16 mb-auto w-full rounded-xl bg-toolbar p-6 text-foreground;
+    @apply max-sm:mt-4;
     @apply border border-line;
     @apply shadow-xl;
   }
   dialog::backdrop {
-    background: #00000026;
+    background: #0000004d;
   }
   dialog h2 {
     @apply mx-0 mt-0 mb-2.5 text-sm;
@@ -137,7 +127,7 @@
   @variant dark {
     dialog {
       @apply border-line;
-      @apply shadow-2xl;
+      @apply shadow-xl;
     }
   }
 
@@ -156,6 +146,26 @@
       @apply px-2 py-0;
     }
   }
+  /* Phones and touch screens get 40px hit areas in dialogs and the runner details panel; the
+     text keeps its size. Controls that set their own min-height utility keep it. */
+  @variant max-md {
+    :is(dialog, [data-inspector])
+      :is(button, select, input:not([type='checkbox'], [type='radio'])) {
+      @apply min-h-10;
+    }
+    :is(dialog, [data-inspector]) summary {
+      @apply py-3;
+    }
+  }
+  @variant pointer-coarse {
+    :is(dialog, [data-inspector])
+      :is(button, select, input:not([type='checkbox'], [type='radio'])) {
+      @apply min-h-10;
+    }
+    :is(dialog, [data-inspector]) summary {
+      @apply py-3;
+    }
+  }
   @variant motion-reduce {
     button:active:not(:disabled) {
       @apply transform-none;
@@ -165,10 +175,25 @@
     @apply text-accent;
   }
   dialog {
-    @apply max-h-11/12 w-full max-w-lg overflow-y-auto;
+    /* Phones anchor dialogs 16px from the top, so they may grow to leave a similar gap below. */
+    @apply max-h-5/6 w-full max-w-lg overflow-y-auto max-sm:max-h-11/12;
   }
+  /* Disclosures use the app's drawn chevron, rotated when open, instead of the browser triangle. */
   summary {
-    @apply cursor-pointer;
+    @apply flex cursor-pointer list-none items-center gap-1.5;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary::before {
+    @apply size-3 shrink-0 bg-current opacity-60 transition-transform duration-150;
+    @apply motion-reduce:transition-none;
+    content: '';
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 5 7 7-7 7'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  details[open] > summary::before {
+    @apply rotate-90;
   }
   dialog {
     overscroll-behavior: contain;
@@ -183,12 +208,37 @@
 }
 @layer activity {
   @variant dark {
-    .execution-shell {
-      --activity-link: #58a6ff;
+    [data-execution-shell] {
       --line: #3d444d;
+    }
+    /* Status colors also apply at the root for dialogs and toasts outside the app shell. */
+    :root,
+    [data-execution-shell] {
       --activity-success: #3fb950;
       --activity-running: #d29922;
-      --activity-failure: #f85149;
+      --activity-failure: #ff7b72;
     }
   }
+}
+
+/* Filled buttons for the main and destructive action of a view. */
+@utility button-primary {
+  @apply bg-accent-fill font-medium text-white;
+  border-color: #0000000a;
+}
+@utility button-destructive {
+  @apply bg-danger-fill font-medium text-white;
+  border-color: #0000000a;
+}
+
+/* Log gutters print the line number and time from data attributes as generated content, so
+   copied output keeps only the log text. Use with `before:` or `after:`; like Tailwind's own
+   content utilities, they set --tw-content, which every pseudo-element utility reads. */
+@utility content-line-number {
+  --tw-content: attr(data-number);
+  content: var(--tw-content);
+}
+@utility content-line-time {
+  --tw-content: attr(data-time);
+  content: var(--tw-content);
 }

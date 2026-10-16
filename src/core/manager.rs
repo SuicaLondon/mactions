@@ -10,10 +10,12 @@ use std::{
 };
 
 use super::{labels, Backend, Create, Runner, Target};
+use crate::activity::JobListCache;
 
 pub struct Manager {
     pub root: PathBuf,
     pub(crate) backend: Arc<dyn Backend>,
+    pub(crate) job_lists: JobListCache,
 }
 impl Manager {
     pub fn new(root: PathBuf, backend: Arc<dyn Backend>) -> Result<Self> {
@@ -22,7 +24,11 @@ impl Manager {
         ensure!(!root.to_string_lossy().chars().any(|c| c.is_control() || "&<>@\\".contains(c)), "Official macOS runner service scripts cannot safely substitute this data path. Use a path without &, <, >, @, backslashes, or control characters");
         fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
         fs::create_dir_all(root.join("records"))?;
-        Ok(Self { root, backend })
+        Ok(Self {
+            root,
+            backend,
+            job_lists: JobListCache::default(),
+        })
     }
     fn lock(&self) -> Result<File> {
         let f = OpenOptions::new()

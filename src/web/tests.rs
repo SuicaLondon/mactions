@@ -3,10 +3,7 @@ use crate::native::Native;
 use tiny_http::TestRequest;
 fn manager() -> (tempfile::TempDir, Manager) {
     let temp = tempfile::tempdir().unwrap();
-    let native = Native {
-        root: temp.path().into(),
-        gh: "/does-not-exist".into(),
-    };
+    let native = Native::new(temp.path().into(), "/does-not-exist".into());
     let manager = Manager::new(temp.path().into(), Arc::new(native)).unwrap();
     (temp, manager)
 }

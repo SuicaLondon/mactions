@@ -1,16 +1,30 @@
-import { RunnerDialog } from '../../dialogs/components/RunnerDialog';
-import { RunnerCreationContext } from '../context/runner-creation-context';
-import { useCreateRunner } from '../hooks/use-create-runner';
-import { type CreateRunnerOptions } from '../models/runner-creation';
-import { CreateRunnerForm } from './form/CreateRunnerForm';
+import { ModalDialog } from '../../../../shared/ui/dialog/components/ModalDialog';
+import { useRunnerCreationStatus } from '../hooks/use-runner-creation-status';
+import { CreateRunnerForm } from './CreateRunnerForm';
 
-export function CreateDialog(options: CreateRunnerOptions) {
-  const creation = useCreateRunner(options);
+export interface CreateDialogProps {
+  locked: boolean;
+  initializing?: boolean;
+  onClose: () => void;
+}
+
+/** Shows the Add runner session the opener started with the creation store's start(). */
+export function CreateDialog({ locked, initializing = false, onClose }: CreateDialogProps) {
+  const { pending } = useRunnerCreationStatus();
+  function cancel() {
+    if (!pending) onClose();
+  }
   return (
-    <RunnerCreationContext value={creation}>
-      <RunnerDialog title="Add Runner" onClose={creation.close}>
-        {(titleId) => <CreateRunnerForm titleId={titleId} />}
-      </RunnerDialog>
-    </RunnerCreationContext>
+    <ModalDialog onClose={cancel}>
+      {(titleId) => (
+        <CreateRunnerForm
+          titleId={titleId}
+          locked={locked}
+          initializing={initializing}
+          onCancel={cancel}
+          onCreated={onClose}
+        />
+      )}
+    </ModalDialog>
   );
 }
