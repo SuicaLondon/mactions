@@ -13,7 +13,7 @@ web/src/
     pages/components/   Page selection and feature composition
     runners/            components/, hooks/, models/, stores/ for shared workspace state
     setup/              hooks/, models/, stores/ for GitHub and first-visit state
-    shell/              components/ with filters/ and notices/, hooks/, models/, stores/
+    shell/              components/ with filters/ and notices/, hooks/, models/
   features/
     runners/            activity/, creation/, dialogs/, inspector/, list/, menu/
                         data/{hooks,models,stores}/ and shared/{components,models}/

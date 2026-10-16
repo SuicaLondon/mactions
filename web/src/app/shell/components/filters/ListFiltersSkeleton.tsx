@@ -34,7 +34,8 @@ export function ListFiltersSkeleton({
       <div
         className={cn(
           'flex min-h-13.5 flex-wrap items-center gap-2 border-b border-line bg-surface',
-          'px-4 py-2.5 @max-xl/activity-main:grid @max-xl/activity-main:grid-cols-2',
+          'px-4 py-2.5 max-md:px-3 @max-xl/activity-main:grid',
+          '@max-xl/activity-main:grid-cols-2',
         )}
       >
         {fieldClasses.map((field, index) => (

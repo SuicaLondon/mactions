@@ -1,5 +1,3 @@
-import { useId } from 'react';
-
 import { ScopeFilters } from '../../../../features/github/components/ScopeFilters';
 import { useLocalRunners } from '../../../../features/runners/data/hooks/use-local-runners';
 import { useRunnersLoading } from '../../../../features/runners/data/hooks/use-runners-loading';
@@ -10,10 +8,8 @@ import { useCurrentPage } from '../../../navigation/hooks/use-current-page';
 import { isRunsList } from '../../../navigation/models/app-navigation';
 import { useNavigationStore } from '../../../navigation/stores/navigation-store';
 import { useGitHubConnected } from '../../../setup/hooks/use-github-connected';
-import { activeFilterCount, listFilterCopy } from '../../models/list-filters';
-import { useListFiltersStore } from '../../stores/list-filters-store';
+import { listFilterCopy } from '../../models/list-filters';
 import { ListFiltersSkeleton } from './ListFiltersSkeleton';
-import { ListFiltersToggle } from './ListFiltersToggle';
 import { SelectField } from './SelectField';
 
 export function ListFilters() {
@@ -25,8 +21,6 @@ export function ListFilters() {
   const starting = useRunnersLoading();
   const connected = useGitHubConnected();
   const runsList = isRunsList(page, preferences.view);
-  const filtersOpen = useListFiltersStore((state) => state.open);
-  const panelId = useId();
   const showScope = page.type === 'list';
   if (starting) return <ListFiltersSkeleton runsList={runsList} showScope={showScope} />;
   const { filterLabel, searchLabel, statusLabel, statusOptions } = listFilterCopy(runsList);
@@ -53,43 +47,36 @@ export function ListFilters() {
       )}
       aria-label={filterLabel}
     >
-      {/* Phones keep the search field and Filters toggle on one row. */}
-      <div className="contents max-md:col-span-2 max-md:flex max-md:gap-2">
-        <label
+      <label
+        className={cn(
+          'flex h-8 max-w-60 min-w-32.5 shrink grow basis-32',
+          // On touch the input itself is the 40px target, so the bordered field grows around it.
+          'max-md:h-auto pointer-coarse:h-auto',
+          'items-center gap-1.25 rounded-md border border-control-border bg-canvas px-2',
+          'text-muted focus-within:outline-3 focus-within:outline-offset-1',
+          'focus-within:outline-focus @max-xl/activity-main:col-span-2',
+          '@max-xl/activity-main:max-w-none @max-xl/activity-main:basis-full',
+          'max-md:min-w-0 max-md:basis-auto',
+        )}
+      >
+        <SearchIcon className="size-3.5" />
+        <input
           className={cn(
-            'flex h-8 max-w-60 min-w-32.5 shrink grow basis-32',
-            // On touch the input itself is the 40px target, so the bordered field grows around it.
-            'max-md:h-auto pointer-coarse:h-auto',
-            'items-center gap-1.25 rounded-md border border-control-border bg-canvas px-2',
-            'text-muted focus-within:outline-3 focus-within:outline-offset-1',
-            'focus-within:outline-focus @max-xl/activity-main:col-span-2',
-            '@max-xl/activity-main:max-w-none @max-xl/activity-main:basis-full',
-            'max-md:min-w-0 max-md:basis-auto',
+            'w-full rounded-xs border-0 bg-transparent px-0 py-1 text-xs text-foreground',
+            'max-md:min-h-10 pointer-coarse:min-h-10',
+            'outline-none focus-visible:outline-none',
           )}
-        >
-          <SearchIcon className="size-3.5" />
-          <input
-            className={cn(
-              'w-full rounded-xs border-0 bg-transparent px-0 py-1 text-xs text-foreground',
-              'max-md:min-h-10 pointer-coarse:min-h-10',
-              'outline-none focus-visible:outline-none',
-            )}
-            type="search"
-            placeholder={searchLabel}
-            aria-label={searchLabel}
-            autoComplete="off"
-            spellCheck={false}
-            value={search}
-            onChange={(event) => changeSearch(event.target.value)}
-          />
-        </label>
-        <ListFiltersToggle
-          panelId={panelId}
-          count={activeFilterCount(preferences, { runsList, showScope })}
+          type="search"
+          placeholder={searchLabel}
+          aria-label={searchLabel}
+          autoComplete="off"
+          spellCheck={false}
+          value={search}
+          onChange={(event) => changeSearch(event.target.value)}
         />
-      </div>
-      {/* Desktop lays the selects out inline; phones collapse them behind the toggle. */}
-      <div id={panelId} className={cn('contents', { 'max-md:hidden': !filtersOpen })}>
+      </label>
+      {/* Every control stays in the toolbar; narrow screens wrap them onto two columns. */}
+      <div className="contents">
         {showScope && (
           <ScopeFilters
             scope={preferences.scope}

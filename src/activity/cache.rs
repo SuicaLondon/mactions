@@ -5,6 +5,12 @@ use std::{collections::HashMap, sync::Mutex};
 /// Total cached Jobs across all lists. Lists omit Steps, so this stays a few MiB.
 const MAX_JOBS: usize = 2048;
 
+/// An empty list (a Run cancelled before its Jobs started) still takes one unit of the budget,
+/// so the number of entries stays bounded too.
+fn cost(jobs: &[Value]) -> usize {
+    jobs.len().max(1)
+}
+
 /// One Job list request: a single attempt, or every attempt up to and including `attempt`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(super) struct JobListKey {
@@ -57,9 +63,9 @@ impl JobListCache {
         }
         let mut lists = self.0.lock().unwrap();
         if let Some((_, previous)) = lists.entries.remove(&key) {
-            lists.jobs -= previous.len();
+            lists.jobs -= cost(&previous);
         }
-        while lists.jobs + jobs.len() > MAX_JOBS {
+        while lists.jobs + cost(jobs) > MAX_JOBS {
             let Some(oldest) = lists
                 .entries
                 .iter()
@@ -69,11 +75,11 @@ impl JobListCache {
                 break;
             };
             let (_, evicted) = lists.entries.remove(&oldest).unwrap();
-            lists.jobs -= evicted.len();
+            lists.jobs -= cost(&evicted);
         }
         lists.clock += 1;
         let clock = lists.clock;
-        lists.jobs += jobs.len();
+        lists.jobs += cost(jobs);
         lists.entries.insert(key, (clock, jobs.to_vec()));
     }
 
@@ -115,5 +121,22 @@ mod tests {
         cache.insert(key(4), &completed(MAX_JOBS + 1));
         assert!(cache.get(&key(4)).is_none());
         assert_eq!(cache.len(), 2);
+    }
+
+    #[test]
+    fn empty_lists_count_against_the_budget() {
+        let cache = JobListCache::default();
+        for run in 0..MAX_JOBS as u64 + 100 {
+            cache.insert(JobListKey::new("example/repo", run, 1, true), &[]);
+        }
+        assert_eq!(cache.len(), MAX_JOBS);
+        assert!(cache
+            .get(&JobListKey::new(
+                "example/repo",
+                MAX_JOBS as u64 + 99,
+                1,
+                true
+            ))
+            .is_some());
     }
 }

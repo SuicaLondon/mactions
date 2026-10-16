@@ -192,6 +192,40 @@ it('preserves History result filters and expanded Steps after visiting a histori
   expect(requestedActivity('job-logs')).toHaveLength(0);
 });
 
+it('opens the current execution’s Run from History as a new page', async () => {
+  window.history.replaceState(null, '', '/#/runs');
+  serveActivity();
+  mount();
+  const user = userEvent.setup();
+  await openRun(user);
+  const history = await openJobHistory(user);
+  await user.click(await history.findByRole('button', { name: 'Open run #42' }));
+  expect(await screen.findByRole('region', { name: 'Run details for CI #42' })).toBeVisible();
+  // Back traverses history after two timer tasks; let any traversal settle first.
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  expect(backButton()).toHaveTextContent('Back to History');
+});
+
+it('restores the History parent of a Run on browser Forward', async () => {
+  window.history.replaceState(null, '', '/#/runs');
+  serveActivity();
+  mount();
+  const user = userEvent.setup();
+  await openRun(user);
+  const history = await openJobHistory(user);
+  await user.click(await history.findByRole('button', { name: 'Open run #41' }));
+  await screen.findByRole('region', { name: 'Run details for CI #41' });
+  expect(backButton()).toHaveTextContent('Back to History');
+  act(() => window.history.back());
+  await screen.findByRole('region', { name: 'History for Build application' });
+  act(() => window.history.forward());
+  expect(await screen.findByRole('region', { name: 'Run details for CI #41' })).toBeVisible();
+  expect(backButton()).toHaveTextContent('Back to History');
+});
+
 it('restores both loaded Run pages after inactive queries expire without waiting for refetch', async () => {
   let blockParents = false;
   serve((path, options) => {

@@ -1,20 +1,3 @@
-import type { AppPreferences } from '../../navigation/models/app-preferences';
-
-/** Counts the filters, other than search, that narrow the visible list. */
-export function activeFilterCount(
-  preferences: AppPreferences,
-  { runsList, showScope }: { runsList: boolean; showScope: boolean },
-) {
-  let status = preferences.runnerStatus;
-  if (runsList) status = preferences.runStatus;
-  const active = [status !== 'all'];
-  if (!runsList) active.push(preferences.device !== 'all');
-  if (showScope) {
-    active.push(Boolean(preferences.scope.organization), Boolean(preferences.scope.repository));
-  }
-  return active.filter(Boolean).length;
-}
-
 const RUNNER_FILTER_COPY = {
   filterLabel: 'Runner filters',
   searchLabel: 'Search runners',

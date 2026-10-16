@@ -243,6 +243,27 @@ fn scope_list(value: &str) -> Vec<String> {
 mod tests {
     use super::{failure_message, Api, Failure};
     use std::{io::Write, net::TcpListener, thread};
+    use ureq::Proxy;
+
+    #[test]
+    fn an_unreachable_socks_proxy_fails_instead_of_connecting_directly() {
+        // Without SOCKS support ureq only warns and connects to the target itself.
+        let target = TcpListener::bind("127.0.0.1:0").unwrap();
+        let target_port = target.local_addr().unwrap().port();
+        target.set_nonblocking(true).unwrap();
+        let closed = TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy_port = closed.local_addr().unwrap().port();
+        drop(closed);
+        for scheme in ["socks5", "socks5h"] {
+            let proxy = Proxy::new(&format!("{scheme}://127.0.0.1:{proxy_port}")).unwrap();
+            let api = Api::with_proxy(format!("http://127.0.0.1:{target_port}"), Some(proxy));
+            assert!(api.send("fixture-token", "GET", "/user", None).is_err());
+            assert!(
+                target.accept().is_err(),
+                "{scheme} request bypassed the proxy"
+            );
+        }
+    }
 
     #[test]
     fn https_uses_the_platform_tls_provider() {
