@@ -19,6 +19,8 @@ const checksum = (file: string) => createHash('sha256').update(fs.readFileSync(f
 function buildRelease() {
   run('npm', ['ci']);
   run('npm', ['run', 'build']);
+  // cargo-about reads metadata for every platform in Cargo.lock, so fetch them all before --frozen.
+  run('cargo', ['fetch', '--locked']);
   run('cargo', ['build', '--release', '--locked']);
   run('cargo', [
     'about',
