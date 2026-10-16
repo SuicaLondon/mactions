@@ -1,4 +1,4 @@
-import type { CIRecording } from '../../types/recording';
+import { type CIRecording } from '../../types/recording';
 import { RecordingPlayer } from './RecordingPlayer';
 
 export function ReplayPanel({ recording }: { recording: CIRecording }) {

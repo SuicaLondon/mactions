@@ -38,6 +38,9 @@ impl Backend for Native {
     fn github_cli(&self) -> Option<PathBuf> {
         Some(self.gh.clone())
     }
+    fn user_with_scopes(&self) -> Result<(Value, Option<Vec<String>>)> {
+        Native::user_with_scopes(self)
+    }
     fn api(&self, method: &str, endpoint: &str, body: Option<Value>) -> Result<Value> {
         // The runner list is paginated for both name collision checks and status lookup.
         if method == "GET" && endpoint.ends_with("/actions/runners?per_page=100") {

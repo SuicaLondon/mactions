@@ -1,6 +1,6 @@
 import { stateFor } from '../../../../shared/lib/activity-format';
 import { cn } from '../../../../shared/lib/cn';
-import { StatusIcon } from '../../../../shared/ui/icons/status/StatusIcon';
+import { StatusIcon } from '../../../../shared/ui/icons/StatusIcon';
 
 const toneClasses: Record<string, string> = {
   neutral: 'text-muted bg-muted/10',
@@ -25,7 +25,7 @@ export function Status({
   return (
     <span
       className={cn(
-        'activity-status inline-flex items-center gap-1.25 rounded-md px-1.75 py-0.75',
+        'inline-flex items-center gap-1.25 rounded-md px-1.75 py-0.75',
         'text-xs font-medium whitespace-nowrap',
         { 'gap-1 px-1.25': compact },
         toneClasses[state.tone],

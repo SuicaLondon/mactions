@@ -15,12 +15,20 @@ const run = (command: string, args: string[]) =>
   execFileSync(command, args, { cwd: repo, stdio: 'inherit' });
 const checksum = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 
+// The frontend build writes dist/licenses/FRONTEND-LICENSES.txt; cargo-about writes the Rust one.
 function buildRelease() {
-  run('npm', ['--prefix', 'web', 'ci']);
-  run('npm', ['--prefix', 'web', 'run', 'build']);
-  run(process.execPath, ['--experimental-strip-types', 'scripts/frontend-notices.ts']);
+  run('npm', ['ci']);
+  run('npm', ['run', 'build']);
   run('cargo', ['build', '--release', '--locked']);
-  run(process.execPath, ['--experimental-strip-types', 'scripts/generate-notices.ts']);
+  run('cargo', [
+    'about',
+    'generate',
+    '--frozen',
+    '--fail',
+    'about.hbs',
+    '--output-file',
+    'dist/licenses/DEPENDENCY-LICENSES.txt',
+  ]);
 }
 
 function downloadGitHubCli(): string {
@@ -78,15 +86,8 @@ function copyDocumentation() {
   if (fs.existsSync(path.join(repo, 'docs/memory-measurements.json')))
     files.push('docs/memory-measurements.json');
   for (const file of files) fs.copyFileSync(path.join(repo, file), path.join(bundle, file));
-  for (const name of [
-    'THIRD-PARTY-NOTICES.md',
-    'DEPENDENCY-LICENSES.txt',
-    'FRONTEND-LICENSES.txt',
-  ]) {
-    let directory = 'dist/licenses';
-    if (name === 'THIRD-PARTY-NOTICES.md') directory = 'docs';
-    fs.copyFileSync(path.join(repo, directory, name), path.join(bundle, 'licenses', name));
-  }
+  for (const name of ['DEPENDENCY-LICENSES.txt', 'FRONTEND-LICENSES.txt'])
+    fs.copyFileSync(path.join(repo, 'dist/licenses', name), path.join(bundle, 'licenses', name));
 }
 
 function writeManifest() {

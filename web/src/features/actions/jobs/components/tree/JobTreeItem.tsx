@@ -2,52 +2,48 @@ import type { Job } from '../../../../../shared/api/types';
 import { jobRunnerName, stateFor } from '../../../../../shared/lib/activity-format';
 import { cn } from '../../../../../shared/lib/cn';
 import { LiveDuration } from '../../../../../shared/ui/duration/components/LiveDuration';
-import { ChevronIcon } from '../../../../../shared/ui/icons/navigation/ChevronIcon';
-import { StatusIcon } from '../../../../../shared/ui/icons/status/StatusIcon';
+import { ChevronIcon } from '../../../../../shared/ui/icons/ChevronIcon';
+import { StatusIcon } from '../../../../../shared/ui/icons/StatusIcon';
 import type { JobSummary } from '../../../data/types/activity-types';
 import { statusTextClasses } from '../../../shared/models/status-classes';
-import { type useJobTree } from '../../hooks/use-job-tree';
+import { jobTreeNode } from '../../models/job-tree-node';
 import type { JobSelection } from '../../types/job-selection';
+import type { TreePosition } from '../../types/tree-position';
 import { JobTreeSteps } from './JobTreeSteps';
 
+/**
+ * A job row and, when expanded, its steps. The tree handles focus, keys, and clicks for
+ * every row, so this only draws the row's state.
+ */
 export function JobTreeItem({
   job,
-  index,
-  count,
+  position,
   detail,
   expanded,
-  highlightRunnerId,
-  selected,
-  focused,
-  first,
-  setFocused,
-  keyboard,
-  onSelect,
-  onToggle,
+  ranOnSelectedRunner,
+  selection,
+  tabbable,
 }: {
   job: JobSummary;
-  index: number;
-  count: number;
+  position: TreePosition;
   detail: Job | undefined;
   expanded: boolean;
-  highlightRunnerId?: number;
-  first: string;
-  focused: string | null;
-  setFocused: (node: string) => void;
-  keyboard: ReturnType<typeof useJobTree>['keyboard'];
-  selected: JobSelection | null;
-  onSelect: (selection: JobSelection) => void;
-  onToggle: (jobId: number, expanded: boolean) => void;
+  /** The job ran on the runner the page is showing. */
+  ranOnSelectedRunner: boolean;
+  /** The tree's selection, given only when it is this job or one of its steps. */
+  selection: JobSelection | undefined;
+  /** The `data-node` id of the row that takes Tab focus. */
+  tabbable: string;
 }) {
   const state = stateFor(job.status, job.conclusion);
+  const failed = state.tone === 'failure';
 
-  const highlighted = highlightRunnerId !== undefined && job.runner_id === highlightRunnerId;
-  const selectedJob = selected?.jobId === job.id;
-  const node = `job-${job.id}`;
+  const node = jobTreeNode(job.id);
+  const selectedRow = !!selection && selection.stepNumber === undefined;
   let ownedSteps: string | undefined;
   if (expanded) ownedSteps = `job-tree-${job.id}-steps`;
   let tabIndex = -1;
-  if ((focused ?? first) === node) tabIndex = 0;
+  if (tabbable === node) tabIndex = 0;
   const assignmentLabels = [jobRunnerName(job)];
   if (job.runner_name || job.runner_id) {
     if (job.host_type === 'github-hosted') assignmentLabels.push('GitHub-hosted');
@@ -60,56 +56,41 @@ export function JobTreeItem({
   return (
     <li
       role="none"
-      className={cn('job-tree-item relative', {
-        'assigned-to-selected-runner border-l-2 border-l-accent': highlighted,
-      })}
+      data-selected-runner={ranOnSelectedRunner || undefined}
+      className={cn('relative', { 'bg-accent/5': ranOnSelectedRunner })}
     >
       <button
         role="treeitem"
         className={cn(
-          'job-tree-row flex min-h-13.5 w-full items-center justify-start gap-2',
+          'flex min-h-13.5 w-full items-center justify-start gap-2',
           'rounded-none border-0 bg-transparent px-3 py-2.5 text-left whitespace-normal',
           'text-foreground shadow-none -outline-offset-2 max-sm:gap-1 max-sm:py-1.75',
-          'hover:bg-muted/5 aria-selected:border-l-2 aria-selected:border-l-accent',
+          'hover:bg-muted/5',
           'hover:filter-none aria-selected:bg-accent/10',
-          {
-            selected: selectedJob && selected.stepNumber === undefined,
-          },
+          { 'bg-activity-failure/5': failed },
         )}
         aria-label={`${job.name}, ${state.label}, ${assignment}`}
         aria-level={1}
-        aria-posinset={index + 1}
-        aria-setsize={count}
+        aria-posinset={position.index + 1}
+        aria-setsize={position.count}
         aria-expanded={expanded}
-        aria-selected={selectedJob && selected.stepNumber === undefined}
+        aria-selected={selectedRow}
         aria-controls={`job-tree-${job.id}-steps`}
         aria-owns={ownedSteps}
         data-node={node}
         tabIndex={tabIndex}
-        onFocus={() => setFocused(node)}
-        onKeyDown={(event) => keyboard(event, job.id)}
-        onClick={(event) => {
-          if ((event.target as Element).closest('[data-disclosure]')) {
-            if (!expanded) onSelect({ jobId: job.id });
-            onToggle(job.id, !expanded);
-          } else {
-            onSelect({ jobId: job.id });
-            onToggle(job.id, true);
-          }
-        }}
       >
         <span
-          className={cn(
-            'job-tree-disclosure inline-flex h-5 w-3.25 shrink-0 items-center justify-center',
-            { 'rotate-90': expanded },
-          )}
+          className={cn('inline-flex h-5 w-3.25 shrink-0 items-center justify-center', {
+            'rotate-90': expanded,
+          })}
           data-disclosure
         >
           <ChevronIcon className="size-2.75 text-muted" />
         </span>
         <span
           className={cn(
-            'tree-status-symbol inline-flex w-4.5 shrink-0 items-center text-muted',
+            'inline-flex w-4.5 shrink-0 items-center text-muted',
             state.tone,
             statusTextClasses[state.tone],
           )}
@@ -117,23 +98,28 @@ export function JobTreeItem({
         >
           <StatusIcon className="size-4.25 stroke-2" name={state.icon} />
         </span>
-        <span className="job-tree-label min-w-0 flex-1 text-xs leading-normal">
-          <strong className="block overflow-hidden text-xs font-medium text-ellipsis whitespace-nowrap">
+        <span className="min-w-0 flex-1 text-xs/normal">
+          <strong
+            className={cn('block truncate text-xs font-medium', {
+              'text-activity-failure': failed,
+            })}
+            title={job.name}
+          >
             {job.name}
           </strong>
           <span
             className={cn(
-              'job-tree-meta mt-0.25 flex items-center gap-1.25 overflow-hidden text-xs',
-              'text-ellipsis whitespace-nowrap text-muted max-sm:text-xs',
+              'mt-0.25 flex min-w-0 items-center gap-1.25 overflow-hidden',
+              'text-xs whitespace-nowrap text-muted max-sm:text-xs',
             )}
             title={assignment}
           >
-            {assignment}
-            {!!highlighted && (
+            <span className="min-w-0 truncate">{assignment}</span>
+            {!!ranOnSelectedRunner && (
               <span
                 className={cn(
-                  'selected-runner-mark ml-1.5 hidden border-l-2 border-l-accent pl-1.25 text-xs',
-                  'whitespace-nowrap text-muted',
+                  'ml-1.5 rounded-sm bg-accent/10 px-1 text-xs',
+                  'whitespace-nowrap text-accent',
                 )}
                 title="Assigned to the selected runner"
               >
@@ -142,7 +128,7 @@ export function JobTreeItem({
             )}
           </span>
         </span>
-        <span className="job-tree-duration shrink-0 text-xs text-muted tabular-nums max-sm:hidden">
+        <span className="shrink-0 text-xs text-muted tabular-nums max-sm:hidden">
           <LiveDuration
             start={job.started_at}
             end={job.completed_at}
@@ -156,21 +142,11 @@ export function JobTreeItem({
           role="group"
           aria-label={`Steps for ${job.name}`}
           className={cn(
-            'job-tree-children m-0 mt-0 mr-2.5 mb-2.5 ml-5.5 list-none rounded-md bg-muted/5',
+            'm-0 mt-0 mr-2.5 mb-2.5 ml-5.5 list-none rounded-md bg-muted/5',
             'p-1 max-sm:mr-1.5 max-sm:ml-2',
           )}
         >
-          <JobTreeSteps
-            detail={detail}
-            selectedJob={selectedJob}
-            selected={selected}
-            node={node}
-            focused={focused}
-            setFocused={setFocused}
-            keyboard={keyboard}
-            job={job}
-            onSelect={onSelect}
-          />
+          <JobTreeSteps jobId={job.id} detail={detail} selection={selection} tabbable={tabbable} />
         </ul>
       )}
     </li>

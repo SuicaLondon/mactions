@@ -1,80 +1,80 @@
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { useId, useRef } from 'react';
 import ReactSelect from 'react-select';
 
+import { useSelectMenu } from '../hooks/use-select-menu';
 import { menuPosition } from '../models/menu-position';
+import { selectBehavior } from '../models/select-behavior';
 import { selectClassNames } from '../models/select-class-names';
-import type { SelectOption } from '../types';
-import type { DropdownProps } from '../types';
-import { DropdownInput } from './DropdownInput';
-import { DropdownLoadingMessage } from './DropdownLoadingMessage';
-import { DropdownMenu } from './DropdownMenu';
-import { DropdownValueContainer } from './DropdownValueContainer';
+import { selectedOption, selectItems } from '../models/select-options';
+import {
+  type ReactSelectProps,
+  type SelectMenuOptions,
+  type SelectOption,
+  type SelectVariant,
+} from '../types';
+import { SelectInput } from './SelectInput';
+import { SelectLoadingMessage } from './SelectLoadingMessage';
+import { SelectMenu } from './SelectMenu';
+import { SelectNoOptionsMessage } from './SelectNoOptionsMessage';
 import { SelectOptionLabel } from './SelectOptionLabel';
+import { SelectValueContainer } from './SelectValueContainer';
+
+// React Select part overrides, shared by every select.
+const components = {
+  Menu: SelectMenu,
+  Input: SelectInput,
+  ValueContainer: SelectValueContainer,
+  LoadingMessage: SelectLoadingMessage,
+  NoOptionsMessage: SelectNoOptionsMessage,
+};
+
+export interface SelectControlProps {
+  /** The accessible name of the combobox. */
+  label: string;
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+  variant: SelectVariant;
+  id?: string;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  searchable?: boolean;
+  /** Allows choosing no value, reported as an empty string. */
+  clearable?: boolean;
+  menu?: SelectMenuOptions;
+}
 
 export function SelectControl({
   label,
   value,
   options,
   onChange,
+  variant,
   id,
-  className = 'filter-choice min-w-27.5',
-  compact = true,
-  embedded = true,
+  className,
+  placeholder,
+  disabled = false,
   searchable = false,
   clearable = false,
-  disabled = false,
-  loading = false,
-  placeholder,
-  onOpen,
-  onClose,
-  footer,
-  onLoadMore,
-  loadMoreLabel = 'Load more options',
-}: {
-  label: string;
-  value: string;
-  options: SelectOption[];
-  onChange: (value: string) => void;
-  id?: string;
-  className?: string;
-  compact?: boolean;
-  embedded?: boolean;
-  searchable?: boolean;
-  clearable?: boolean;
-  disabled?: boolean;
-  loading?: boolean;
-  placeholder?: string;
-  onOpen?: () => void;
-  onClose?: () => void;
-  footer?: ReactNode;
-  onLoadMore?: () => void;
-  loadMoreLabel?: string;
-}) {
+  menu: { loading = false, footer, onOpen, onClose, onLoadMore, loadMoreLabel } = {},
+}: SelectControlProps) {
   const generatedId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [input, setInput] = useState('');
+  const { open, input, setInput, close, openMenu, onKeyDown } = useSelectMenu({ onOpen, onClose });
   const moreValue = `${generatedId}-load-more`;
-  let items = options;
-  if (onLoadMore) items = [...options, { value: moreValue, label: loadMoreLabel }];
-  let selected = options.find((option) => option.value === value) ?? null;
-  if (selected === null && value) selected = { value, label: value };
-  function close() {
-    setOpen(false);
-    setInput('');
-    onClose?.();
-  }
-  const props: DropdownProps = {
+  let loadMore: SelectOption | undefined;
+  if (onLoadMore) loadMore = { value: moreValue, label: loadMoreLabel ?? 'Load more options' };
+  const props: ReactSelectProps = {
+    ...selectBehavior,
     inputId: id ?? generatedId,
     instanceId: generatedId,
     'aria-label': label,
-    options: items,
-    value: selected,
+    options: selectItems(options, loadMore),
+    value: selectedOption(options, value),
     inputValue: input,
     onInputChange: (value) => setInput(value),
     isOptionDisabled: (option) => option.value === moreValue && loading,
-    closeMenuOnSelect: false,
-    blurInputOnSelect: false,
     onChange: (option) => {
       if (option?.value === moreValue) {
         onLoadMore?.();
@@ -89,31 +89,10 @@ export function SelectControl({
     isLoading: loading,
     placeholder,
     menuIsOpen: open,
-    onMenuOpen: () => {
-      setOpen(true);
-      onOpen?.();
-    },
+    onMenuOpen: openMenu,
     onMenuClose: close,
-    onKeyDown: (event) => {
-      if (open && event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-      }
-    },
-    tabSelectsValue: false,
-    openMenuOnFocus: false,
-    menuPosition: 'fixed',
-    menuPlacement: 'auto',
-    menuShouldScrollIntoView: false,
-    maxMenuHeight: 240,
-    closeMenuOnScroll: (event) =>
-      !(
-        event.target instanceof Element &&
-        event.target.closest('[role="listbox"], .select-menu-footer')
-      ),
-    unstyled: true,
-    classNames: selectClassNames(compact, embedded),
+    onKeyDown,
+    classNames: selectClassNames(variant),
     styles: {
       menuPortal: (base) => ({
         ...base,
@@ -121,21 +100,14 @@ export function SelectControl({
         zIndex: 20,
       }),
     },
-    components: {
-      Menu: DropdownMenu,
-      Input: DropdownInput,
-      ValueContainer: DropdownValueContainer,
-      LoadingMessage: DropdownLoadingMessage,
-    },
+    components,
     menuFooter: footer,
-    noOptionsMessage: () => 'No matching options. Try another search.',
     formatOptionLabel: (option, context) => (
       <SelectOptionLabel
         option={option}
         context={context}
-        value={value}
-        moreValue={moreValue}
-        loading={loading}
+        selected={option.value === value}
+        loadingMore={option.value === moreValue && loading}
       />
     ),
   };

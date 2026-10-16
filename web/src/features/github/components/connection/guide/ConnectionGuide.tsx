@@ -1,16 +1,18 @@
+import type { ConnectionPanelVariant } from '../../../models/connection-panel';
 import { ConnectionAlternatives } from './ConnectionAlternatives';
 import { TerminalLogin } from './TerminalLogin';
 
 interface ConnectionGuideProps {
-  welcome: boolean;
-  guide: boolean;
+  variant: ConnectionPanelVariant;
+  /** Offers local controls and a registration token as alternatives to connecting. */
+  showAlternatives: boolean;
   onContinueLocal: () => void;
   onUseToken?: () => void;
 }
 
 export function ConnectionGuide({
-  welcome,
-  guide,
+  variant,
+  showAlternatives,
   onContinueLocal,
   onUseToken,
 }: ConnectionGuideProps) {
@@ -20,10 +22,10 @@ export function ConnectionGuide({
         Authorize in the browser on your own computer or phone. This also works over SSH, a local
         network, or Tailscale.
       </p>
-      <TerminalLogin welcome={welcome} />
-      {guide && (
+      <TerminalLogin variant={variant} />
+      {showAlternatives && (
         <ConnectionAlternatives
-          welcome={welcome}
+          variant={variant}
           onContinueLocal={onContinueLocal}
           onUseToken={onUseToken}
         />

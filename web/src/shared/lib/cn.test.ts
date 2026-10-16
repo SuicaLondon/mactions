@@ -15,6 +15,10 @@ describe('cn', () => {
     );
   });
 
+  it('keeps the graph grid utility beside a background colour', () => {
+    expect(cn('bg-canvas graph-grid')).toBe('bg-canvas graph-grid');
+  });
+
   it('merges Tailwind v4 important modifiers and ignores absent inputs', () => {
     expect(cn('px-2! max-md:px-3', null, false, undefined, 'px-4!')).toBe('max-md:px-3 px-4!');
     expect(cn(undefined, null, false)).toBe('');

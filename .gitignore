@@ -8,6 +8,9 @@ node_modules/
 
 /recordings/
 
+# Agent worktrees hold full checkouts, including their own build output.
+/.claude/worktrees/
+
 # Local environment, registry, and runner credentials.
 .env
 .env.*
@@ -16,7 +19,3 @@ node_modules/
 .credentials*
 *.p12
 *.pfx
-
-# Dependency notices are generated during packaging.
-/docs/DEPENDENCY-LICENSES.txt
-/docs/FRONTEND-LICENSES.txt

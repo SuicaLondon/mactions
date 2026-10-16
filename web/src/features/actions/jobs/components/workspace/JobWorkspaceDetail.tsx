@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
-import type { Job } from '../../../../../shared/api/types';
-import { jobRunnerName } from '../../../../../shared/lib/activity-format';
+import { type Job } from '../../../../../shared/api/types';
 import { cn } from '../../../../../shared/lib/cn';
+import { ranOnRunner } from '../../../shared/models/job-runner';
 import { JobWorkspaceContent } from './JobWorkspaceContent';
 import { JobWorkspaceHeader } from './JobWorkspaceHeader';
 
@@ -11,6 +11,7 @@ export function JobWorkspaceDetail({
   repository,
   selectedStepNumber,
   highlightRunnerId,
+  refreshIndicator,
   onOpenHistory,
   onSelectStep,
 }: {
@@ -18,48 +19,38 @@ export function JobWorkspaceDetail({
   repository: string;
   selectedStepNumber?: number;
   highlightRunnerId?: number;
+  /** Shown in the header, such as a failed background refresh. */
+  refreshIndicator?: ReactNode;
   onOpenHistory: (job: Job) => void;
   onSelectStep: (number: number) => void;
 }) {
-  const [fullLog, setFullLog] = useState(false);
+  const [fullLogOpen, setFullLogOpen] = useState(false);
   const step = job.steps.find((item) => item.number === selectedStepNumber);
-  const completed = job.steps.filter((item) => item.status === 'completed').length;
-  const selectedRunner = highlightRunnerId !== undefined && job.runner_id === highlightRunnerId;
-  let runnerType = 'Unknown type';
-  if (job.host_type === 'self-hosted') runnerType = 'Self-hosted';
-  else if (job.host_type === 'github-hosted') runnerType = 'GitHub-hosted';
-  let device = 'Unknown device';
-  if (job.device === 'this_device') device = 'This device';
-  else if (job.device === 'other_device') device = 'Other device';
-  let hosting = 'Not reported';
-  if (job.runner_name || job.runner_id) hosting = `${runnerType} · ${device}`;
-  else if (jobRunnerName(job) === 'Unassigned') hosting = 'Not assigned';
   return (
     <article
       className={cn(
-        'job-workspace-detail px-4.5 pt-3 pb-4.5 max-lg:px-3.5 max-lg:pt-2.5 max-lg:pb-4',
+        'px-4.5 pt-3 pb-4.5 max-lg:px-3.5 max-lg:pt-2.5 max-lg:pb-4',
         '@max-lg/job-detail:px-2.5 @max-lg/job-detail:pt-2.25 @max-lg/job-detail:pb-3.5',
         {
-          'has-selected-step flex h-full min-h-75 flex-col': step,
+          'flex h-full min-h-75 flex-col': step,
         },
       )}
       aria-label={job.name}
     >
       <JobWorkspaceHeader
         job={job}
-        step={step}
-        fullLog={fullLog}
-        setFullLog={setFullLog}
+        showingOverview={!step}
+        fullLogOpen={fullLogOpen}
+        refreshIndicator={refreshIndicator}
+        onToggleFullLog={() => setFullLogOpen((value) => !value)}
         onOpenHistory={onOpenHistory}
       />
       <JobWorkspaceContent
-        step={step}
         job={job}
+        step={step}
         repository={repository}
-        completed={completed}
-        selectedRunner={selectedRunner}
-        hosting={hosting}
-        fullLog={fullLog}
+        ranOnSelectedRunner={ranOnRunner(job, highlightRunnerId)}
+        fullLogOpen={fullLogOpen}
         onSelectStep={onSelectStep}
       />
     </article>

@@ -1,44 +1,24 @@
-import { cn } from '../../../../../shared/lib/cn';
-import { TargetSelect } from '../../../../github/components/targets/TargetSelect';
-import { useRunnerCreationContext } from '../../hooks/use-runner-creation-context';
+import { useRunnerCreationStatus } from '../../hooks/use-runner-creation-status';
+import { parseRunnerTarget } from '../../models/runner-creation';
+import { useRunnerCreationStore } from '../../stores/runner-creation-store';
 import { ManualRunnerTarget } from './ManualRunnerTarget';
-import { TargetDiscoveryAction } from './TargetDiscoveryAction';
-import { TargetDiscoveryStatus } from './TargetDiscoveryStatus';
+import { RunnerTargetPicker } from './picker/RunnerTargetPicker';
 
+/** Picks a discovered target with a GitHub connection, or takes a typed one with a token. */
 export function RunnerTargetField() {
-  const { usePicker, kind, options, target, setTarget, busy, connected, discovery, valid } =
-    useRunnerCreationContext();
-  if (usePicker) {
-    return (
-      <div className="target-selection flex flex-col items-stretch gap-2">
-        <TargetSelect
-          kind={kind}
-          options={options}
-          value={target}
-          onChange={setTarget}
-          disabled={busy || !connected}
-          loading={discovery.isFetching}
-        />
-        <div
-          className={cn(
-            'target-select-status flex h-11 items-center justify-between gap-2 text-xs',
-            'leading-snug text-muted',
-          )}
-          aria-live="polite"
-        >
-          <TargetDiscoveryStatus />
-          <TargetDiscoveryAction />
-        </div>
-      </div>
-    );
-  }
+  const showPicker = useRunnerCreationStore((state) => state.mode === 'automatic');
+  const kind = useRunnerCreationStore((state) => state.kind);
+  const target = useRunnerCreationStore((state) => state.target);
+  const setTarget = useRunnerCreationStore((state) => state.setTarget);
+  const { pending } = useRunnerCreationStatus();
+  if (showPicker) return <RunnerTargetPicker />;
   return (
     <ManualRunnerTarget
       kind={kind}
       target={target}
       onChange={setTarget}
-      disabled={busy}
-      valid={valid}
+      disabled={pending}
+      valid={parseRunnerTarget(kind, target).valid}
     />
   );
 }

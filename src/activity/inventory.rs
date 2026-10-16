@@ -174,10 +174,7 @@ pub fn work(manager: &Manager, scope: &Scope) -> Result<Value> {
         }
     }
     let jobs = parallel_reads(&candidates, |(repo, raw)| {
-        let Some(id) = raw["id"].as_u64() else {
-            return (Err(anyhow::anyhow!("Run has no ID")), 0);
-        };
-        run_jobs_counted(manager, repo, id, None, false)
+        run_jobs_counted(manager, repo, raw, None, false)
     });
     let mut reads = resolved.discovery_reads + requests.len();
     for ((repo, raw), (jobs, job_reads)) in candidates.iter().zip(jobs) {

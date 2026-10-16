@@ -1,37 +1,58 @@
 import { cn } from '../../../../../shared/lib/cn';
-import type { DisplayRunner } from '../../models/runner-list';
+import { SkeletonLine } from '../../../../../shared/ui/loading/components/SkeletonLine';
 
-export function RunnerRowLabels({ row }: { row: DisplayRunner }) {
-  if (row.labels.length)
-    return (
-      <>
-        <div
+const VISIBLE_LABELS = 2;
+
+interface RunnerRowLabelsProps {
+  labels: string[];
+  /** GitHub has not reported the runner's labels yet. */
+  checking: boolean;
+  /** Lists every label, including those the cell leaves out. */
+  title: string | undefined;
+}
+
+/** Keeps labels on one line so every runner row has the same height; the cell title lists all. */
+export function RunnerRowLabels({ labels, checking, title }: RunnerRowLabelsProps) {
+  const hidden = labels.length - VISIBLE_LABELS;
+  let content = (
+    <div className="flex min-w-0 flex-nowrap items-center gap-0.75">
+      {labels.slice(0, VISIBLE_LABELS).map((label) => (
+        <span
           className={cn(
-            'runner-label-list flex max-h-9.5 min-w-0 flex-wrap items-center gap-0.75',
-            'overflow-hidden',
+            'max-w-27.5 min-w-0 overflow-hidden rounded-xs bg-muted/5 px-1.25',
+            'py-0.25 text-xs/4 text-ellipsis whitespace-nowrap text-muted',
           )}
+          key={label}
         >
-          {row.labels.slice(0, 3).map((label) => (
-            <span
-              className={cn(
-                'runner-label max-w-27.5 min-w-0 overflow-hidden rounded-xs bg-muted/5 px-1.25',
-                'py-0.25 text-xs leading-4 text-ellipsis whitespace-nowrap text-muted',
-              )}
-              key={label}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-        {!!(row.labels.length > 3) && (
-          <span
-            className="runner-label-overflow shrink-0 text-xs text-muted"
-            aria-label={`${row.labels.length - 3} more labels`}
-          >
-            +{row.labels.length - 3}
-          </span>
-        )}
-      </>
+          {label}
+        </span>
+      ))}
+      {hidden > 0 && (
+        <span
+          className="shrink-0 text-xs whitespace-nowrap text-muted"
+          aria-label={`${hidden} more labels`}
+        >
+          +{hidden}
+        </span>
+      )}
+    </div>
+  );
+  if (checking) {
+    content = (
+      <span className="flex h-5 items-center" aria-label="Checking labels">
+        <SkeletonLine className="h-4 w-14 rounded-xs" />
+      </span>
     );
-  return <span className="runner-no-labels shrink-0 text-xs text-muted">—</span>;
+  } else if (!labels.length) {
+    content = <span className="shrink-0 text-xs text-muted">—</span>;
+  }
+  return (
+    <div
+      className="flex min-w-0 items-center gap-1.25 @max-5xl:hidden"
+      role="gridcell"
+      title={title}
+    >
+      {content}
+    </div>
+  );
 }

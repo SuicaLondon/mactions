@@ -12,12 +12,13 @@ use std::{
 pub(super) const PAGE_SIZE: usize = 20;
 pub(super) const MAX_PAGES: u64 = 100;
 pub(super) const FILTERED_MAX_PAGES: u64 = 50; // GitHub caps status-filtered searches at 1,000 runs.
-const READ_WORKERS: usize = 4;
+                                               // GitHub CLI requests are mostly process and connection setup, so modest fanout hides that latency.
+const READ_WORKERS: usize = 8;
 pub(super) const ACTIVE_STATUSES: &[&str] =
     &["in_progress", "queued", "waiting", "pending", "requested"];
 
 /// Limit independent read fanout and retain input order, including failed results.
-pub(super) fn parallel_reads<T: Sync, U: Send>(
+pub(crate) fn parallel_reads<T: Sync, U: Send>(
     items: &[T],
     read: impl Fn(&T) -> U + Sync,
 ) -> Vec<U> {

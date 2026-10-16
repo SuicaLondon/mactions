@@ -1,5 +1,8 @@
 //! Legacy runner-scoped job view and repository validation.
-use crate::core::{Manager, Target};
+use crate::{
+    activity::parallel_reads,
+    core::{Manager, Target},
+};
 use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -41,20 +44,18 @@ pub fn jobs(manager: &Manager, id: u64, repository: Option<&str>) -> Result<Valu
         );
     };
     // An explicit, bounded live view; no jobs are written to disk.
-    let recent = manager.backend.api(
-        "GET",
-        &format!("/repos/{repo}/actions/runs?per_page=10"),
-        None,
-    )?;
-    let active = manager.backend.api(
-        "GET",
-        &format!("/repos/{repo}/actions/runs?per_page=10&status=in_progress"),
-        None,
-    )?;
+    let [active, recent]: [Result<Value>; 2] = parallel_reads(
+        &[
+            format!("/repos/{repo}/actions/runs?per_page=10&status=in_progress"),
+            format!("/repos/{repo}/actions/runs?per_page=10"),
+        ],
+        |path| manager.backend.api("GET", path, None),
+    )
+    .try_into()
+    .expect("Both run lists were read");
+    let (active, recent) = (active?, recent?);
     let mut seen = HashSet::new();
-    let mut jobs = vec![];
-    let mut limited = recent["total_count"].as_u64().unwrap_or(0) > 10
-        || active["total_count"].as_u64().unwrap_or(0) > 10;
+    let mut runs = vec![];
     for run in active["workflow_runs"]
         .as_array()
         .context("Invalid workflow response")?
@@ -66,14 +67,22 @@ pub fn jobs(manager: &Manager, id: u64, repository: Option<&str>) -> Result<Valu
         )
     {
         let run_id = run["id"].as_u64().context("Workflow has no ID")?;
-        if !seen.insert(run_id) {
-            continue;
+        if seen.insert(run_id) {
+            runs.push((run_id, run));
         }
-        let data = manager.backend.api(
+    }
+    let responses = parallel_reads(&runs, |(run_id, _)| {
+        manager.backend.api(
             "GET",
             &format!("/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&filter=latest"),
             None,
-        )?;
+        )
+    });
+    let mut jobs = vec![];
+    let mut limited = recent["total_count"].as_u64().unwrap_or(0) > 10
+        || active["total_count"].as_u64().unwrap_or(0) > 10;
+    for (&(run_id, run), data) in runs.iter().zip(responses) {
+        let data = data?;
         limited |= data["total_count"].as_u64().unwrap_or(0) > 100;
         for job in data["jobs"].as_array().context("Invalid jobs response")? {
             if job["runner_id"].as_u64() != Some(github_id) {
@@ -103,3 +112,6 @@ pub fn jobs(manager: &Manager, id: u64, repository: Option<&str>) -> Result<Valu
         json!({"jobs":jobs,"repository":repo,"limited":limited,"message":"Showing assigned jobs from up to 10 active and 10 recent workflow runs (first 100 jobs per run). Unassigned queued jobs cannot be attributed to this Mac."}),
     )
 }
+
+#[cfg(test)]
+mod tests;

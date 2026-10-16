@@ -32,7 +32,7 @@ fn main() {
     println!("cargo:rerun-if-changed=web/dist");
     assert!(
         root.join("index.html").exists(),
-        "Build the frontend first: npm --prefix web ci && npm --prefix web run build"
+        "Build the frontend first: npm ci && npm run build"
     );
     let mut assets = String::from("static ASSETS: &[(&str, &str, &[u8])] = &[\n");
     collect(root, root, &mut assets);

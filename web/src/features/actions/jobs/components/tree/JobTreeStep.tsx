@@ -2,81 +2,58 @@ import type { JobStep } from '../../../../../shared/api/types';
 import { stateFor } from '../../../../../shared/lib/activity-format';
 import { cn } from '../../../../../shared/lib/cn';
 import { LiveDuration } from '../../../../../shared/ui/duration/components/LiveDuration';
-import { StatusIcon } from '../../../../../shared/ui/icons/status/StatusIcon';
-import type { JobSummary } from '../../../data/types/activity-types';
+import { StatusIcon } from '../../../../../shared/ui/icons/StatusIcon';
 import { statusTextClasses } from '../../../shared/models/status-classes';
-import { type useJobTree } from '../../hooks/use-job-tree';
-import type { JobSelection } from '../../types/job-selection';
+import { jobTreeNode, jobTreeStepNode } from '../../models/job-tree-node';
+import type { TreePosition } from '../../types/tree-position';
 
 export function JobTreeStep({
+  jobId,
   step,
-  stepIndex,
-  count,
-  selectedJob,
+  position,
   selected,
-  node,
-  focused,
-  setFocused,
-  keyboard,
-  job,
-  onSelect,
+  tabbable,
 }: {
+  jobId: number;
   step: JobStep;
-  stepIndex: number;
-  count: number;
-  selectedJob: boolean;
-  node: string;
-  job: JobSummary;
-  focused: string | null;
-  setFocused: (node: string) => void;
-  keyboard: ReturnType<typeof useJobTree>['keyboard'];
-  selected: JobSelection | null;
-  onSelect: (selection: JobSelection) => void;
+  position: TreePosition;
+  selected: boolean;
+  /** The `data-node` id of the row that takes Tab focus. */
+  tabbable: string;
 }) {
   const stepState = stateFor(step.status, step.conclusion);
-  const stepNode = `${node}-step-${step.number}`;
-  let stepTabIndex = -1;
-  if (focused === stepNode) stepTabIndex = 0;
+  const node = jobTreeStepNode(jobId, step.number);
+  let tabIndex = -1;
+  if (tabbable === node) tabIndex = 0;
   return (
     <li role="none">
       <button
         role="treeitem"
         className={cn(
-          'job-tree-row job-tree-step relative flex min-h-8 w-full items-center',
+          'relative flex min-h-8 w-full items-center',
           'justify-start gap-2 rounded-sm border-0 bg-transparent px-1.75 py-1.5 text-left',
           'whitespace-normal text-foreground shadow-none -outline-offset-2 max-sm:gap-1',
-          'aria-selected:border-l-2 aria-selected:border-l-accent max-sm:py-1.75',
+          'max-sm:py-1.75',
           'hover:bg-muted/5 hover:filter-none aria-selected:bg-accent/10',
-          {
-            selected: selectedJob && selected?.stepNumber === step.number,
-          },
         )}
         aria-label={`${step.name}, ${stepState.label}`}
         aria-level={2}
-        aria-posinset={stepIndex + 1}
-        aria-setsize={count}
-        aria-selected={selectedJob && selected?.stepNumber === step.number}
-        data-node={stepNode}
-        data-parent={node}
-        tabIndex={stepTabIndex}
-        onFocus={() => setFocused(stepNode)}
-        onKeyDown={(event) => keyboard(event, job.id, step.number)}
-        onClick={() =>
-          onSelect({
-            jobId: job.id,
-            stepNumber: step.number,
-          })
-        }
+        aria-posinset={position.index + 1}
+        aria-setsize={position.count}
+        aria-selected={selected}
+        data-node={node}
+        data-parent={jobTreeNode(jobId)}
+        tabIndex={tabIndex}
       >
         <span
-          className="job-tree-step-number w-4 shrink-0 text-right text-xs text-muted tabular-nums"
+          className="w-4 shrink-0 text-right text-xs text-muted tabular-nums"
           aria-hidden="true"
         >
-          {stepIndex + 1}
+          {position.index + 1}
         </span>
         <span
           className={cn(
-            'tree-status-symbol inline-flex w-4.5 shrink-0 items-center text-muted',
+            'inline-flex w-4.5 shrink-0 items-center text-muted',
             stepState.tone,
             statusTextClasses[stepState.tone],
           )}
@@ -84,8 +61,8 @@ export function JobTreeStep({
         >
           <StatusIcon className="size-4.25 stroke-2" name={stepState.icon} />
         </span>
-        <span className="job-tree-label min-w-0 flex-1 text-xs leading-normal">{step.name}</span>
-        <span className="job-tree-duration shrink-0 text-xs text-muted tabular-nums max-sm:hidden">
+        <span className="min-w-0 flex-1 text-xs/normal">{step.name}</span>
+        <span className="shrink-0 text-xs text-muted tabular-nums max-sm:hidden">
           <LiveDuration
             start={step.started_at}
             end={step.completed_at}

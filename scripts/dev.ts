@@ -120,7 +120,7 @@ async function main() {
   process.once('SIGTERM', () => shutdown(0));
   if (!existsSync(path.join(repo, 'web/dist/index.html'))) {
     console.log('Building initial embedded assets; subsequent frontend edits use Vite HMR.');
-    const [code] = await once(start('npm', ['--prefix', 'web', 'run', 'build']), 'close');
+    const [code] = await once(start('npm', ['run', 'build']), 'close');
     if (code !== 0 || stopping) {
       if (code === 0) shutdown(0);
       else shutdown(1);
@@ -140,7 +140,7 @@ async function main() {
       shutdown(1);
     }
   }, 500);
-  const frontend = start('npm', ['--prefix', 'web', 'run', 'dev']);
+  const frontend = start('npm', ['run', 'dev:web']);
   frontend.once('close', (code) => {
     if (code === 0) shutdown(0);
     else shutdown(1);

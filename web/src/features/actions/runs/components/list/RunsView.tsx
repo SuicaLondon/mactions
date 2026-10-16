@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
-import { cn } from '../../../../../shared/lib/cn';
-import { LoadingPlaceholder } from '../../../../../shared/ui/loading/components/LoadingPlaceholder';
+import { ErrorState } from '../../../../../shared/ui/feedback/components/ErrorState';
 import { useRuns } from '../../../data/hooks/use-runs';
-import type { Scope, WorkflowRun } from '../../../data/types/activity-types';
+import { refreshNote } from '../../../data/models/activity-data';
+import { pagedListStatus } from '../../../data/models/paged-list-status';
+import { type Scope, type WorkflowRun } from '../../../data/types/activity-types';
+import { ActivityLoadMore } from '../../../shared/components/ActivityLoadMore';
+import { DataCoverageNotes } from '../../../shared/components/DataCoverageNotes';
+import { ActivityTableSkeleton } from '../../../shared/components/table/ActivityTableSkeleton';
+import { RunListControls } from './RunListControls';
 import { RunListHeader } from './RunListHeader';
-import { RunsLoadMoreLabel } from './RunsLoadMoreLabel';
+import { RunsEmpty } from './RunsEmpty';
 import { RunTable } from './RunTable';
 
 export function RunsView({
@@ -14,77 +19,70 @@ export function RunsView({
   runnerName,
   onOpenRun,
   search,
-  status,
+  statusFilter,
 }: {
   scope: Scope;
   runnerId?: number;
   runnerName?: string;
   onOpenRun: (run: WorkflowRun) => void;
   search?: string;
-  status?: string;
+  /** A caller-owned status filter, which replaces the local filter control. */
+  statusFilter?: string;
 }) {
   const [filter, setFilter] = useState('all');
-  const {
-    query,
-    allRuns,
-    runs,
-    messages,
-    refreshIntervalSeconds: refreshSeconds,
-  } = useRuns(scope, runnerId, status ?? filter, search);
+  const { query, allRuns, runs, messages, refreshIntervalSeconds } = useRuns(
+    scope,
+    runnerId,
+    statusFilter ?? filter,
+    search,
+  );
+  const list = pagedListStatus(query);
   let label = 'Workflow runs';
   if (runnerName) label = `Runs for ${runnerName}`;
-  let emptyMessage = 'No runs found in this scope with the selected status.';
-  if (!runs.length && !query.isPending && !query.error && allRuns.length) {
-    emptyMessage = 'No loaded runs match these filters. Load more history or change the filters.';
+  let shownFilter: string | undefined;
+  if (statusFilter === undefined) shownFilter = filter;
+  // GitHub may still have older pages after an empty first page, so offer a search, not "more".
+  let loadMoreLabel = 'Load more runs';
+  if (!allRuns.length) loadMoreLabel = 'Search older runs';
+  const retry = () => void query.refetch();
+  let runList: ReactNode = null;
+  if (runs.length) {
+    runList = <RunTable runs={runs} onOpenRun={onOpenRun} />;
+  } else if (list.hasData) {
+    runList = <RunsEmpty scope={scope} runnerName={runnerName} filtered={allRuns.length > 0} />;
   }
   return (
-    <section className="activity-runs" aria-label={label}>
+    <section aria-label={label}>
       <RunListHeader
         runnerName={runnerName}
-        query={query}
-        runs={runs}
-        refreshSeconds={refreshSeconds}
-        status={status}
-        filter={filter}
-        setFilter={setFilter}
+        countLoading={query.isPending}
+        runCount={runs.length}
+        refreshNote={refreshNote(refreshIntervalSeconds)}
+      >
+        <RunListControls
+          refresh={{ error: list.refreshError, refreshing: list.refreshing, onRefresh: retry }}
+          filter={shownFilter}
+          onFilterChange={setFilter}
+        />
+      </RunListHeader>
+      {!!list.loadError && (
+        <ErrorState
+          className="min-h-88"
+          title="Couldn't load workflow runs"
+          error={list.loadError}
+          retrying={list.refreshing}
+          onRetry={retry}
+        />
+      )}
+      {!!list.loading && <ActivityTableSkeleton kind="runs" />}
+      {runList}
+      <DataCoverageNotes messages={messages} />
+      <ActivityLoadMore
+        nextPage={list.nextPage}
+        label={loadMoreLabel}
+        subject="runs"
+        onLoadMore={() => void query.fetchNextPage()}
       />
-      {!!query.error && (
-        <p
-          className={cn(
-            'error-message m-0 mx-0 rounded-md border border-red-500/20 bg-red-500/4 px-3',
-            'py-2.5 text-xs leading-normal wrap-anywhere whitespace-pre-wrap text-danger',
-          )}
-          role="alert"
-        >
-          {query.error.message}
-        </p>
-      )}
-      {!!(query.isPending && !query.error) && <LoadingPlaceholder kind="runs" />}
-      {!!runs.length && <RunTable runs={runs} onOpenRun={onOpenRun} />}
-      {!!(!runs.length && !query.isPending && !query.error) && (
-        <p className="panel-empty m-0 grid flex-1 place-items-center p-5 text-muted">
-          {emptyMessage}
-        </p>
-      )}
-      {!!messages.length && (
-        <details className="activity-data-notes mx-0 mt-2.5 max-w-225 text-xs text-muted">
-          <summary className="cursor-pointer">Data coverage</summary>
-          {messages.map((message) => (
-            <p className="my-2 leading-relaxed" key={message}>
-              {message}
-            </p>
-          ))}
-        </details>
-      )}
-      {!!query.hasNextPage && (
-        <button
-          className="activity-load-more mx-auto my-3 flex text-xs"
-          disabled={query.isFetchingNextPage}
-          onClick={() => void query.fetchNextPage()}
-        >
-          <RunsLoadMoreLabel query={query} />
-        </button>
-      )}
     </section>
   );
 }

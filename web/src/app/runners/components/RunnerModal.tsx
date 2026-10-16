@@ -1,42 +1,37 @@
 import { CreateDialog } from '../../../features/runners/creation/components/CreateDialog';
+import { useRunnerOperationLocked } from '../../../features/runners/data/hooks/use-runner-operation-locked';
+import { useRunnerOperationStatus } from '../../../features/runners/data/hooks/use-runner-operation-status';
+import { useRunnerSnapshot } from '../../../features/runners/data/hooks/use-runner-snapshot';
+import { useRunnersLoading } from '../../../features/runners/data/hooks/use-runners-loading';
 import { ActionDialog } from '../../../features/runners/dialogs/components/ActionDialog';
 import { StorageDialog } from '../../../features/runners/dialogs/components/StorageDialog';
-import { useNavigation } from '../../navigation/hooks/use-navigation';
-import { useRunnerWorkspace } from '../hooks/use-runner-workspace';
+import { useDialogOperation } from '../hooks/use-dialog-operation';
+import { useRunnerWorkspaceStore } from '../stores/runner-workspace-store';
 
 export function RunnerModal() {
-  const { modal, fleet, closeModal, runOperation } = useRunnerWorkspace();
-  const { preferences } = useNavigation();
+  const modal = useRunnerWorkspaceStore((state) => state.modal);
+  const closeModal = useRunnerWorkspaceStore((state) => state.closeModal);
+  const locked = useRunnerOperationLocked();
+  const loading = useRunnersLoading();
+  const dataDirectory = useRunnerSnapshot((snapshot) => snapshot.data_directory);
+  const { pending } = useRunnerOperationStatus();
+  const runDialogOperation = useDialogOperation();
   if (!modal) return null;
   if (modal.type === 'create') {
-    let initialTarget: { kind: 'repo' | 'org'; name: string } | undefined;
-    if (preferences.scope.repository) {
-      initialTarget = { kind: 'repo', name: preferences.scope.repository };
-    } else if (preferences.scope.organization) {
-      initialTarget = { kind: 'org', name: preferences.scope.organization };
-    }
-    return (
-      <CreateDialog
-        initialTarget={initialTarget}
-        initialMode={modal.initialMode}
-        locked={fleet.locked || fleet.query.isPending}
-        initializing={fleet.query.isPending}
-        onClose={closeModal}
-      />
-    );
+    return <CreateDialog locked={locked || loading} initializing={loading} onClose={closeModal} />;
   }
   if (modal.type === 'action') {
     return (
       <ActionDialog
         runner={modal.runner}
         action={modal.action}
-        locked={fleet.locked}
+        locked={locked}
+        pending={pending}
+        error={modal.error}
         onClose={closeModal}
-        onRun={runOperation}
+        onRun={runDialogOperation}
       />
     );
   }
-  return (
-    <StorageDialog path={fleet.query.data?.data_directory || 'Unavailable'} onClose={closeModal} />
-  );
+  return <StorageDialog path={dataDirectory || 'Unavailable'} onClose={closeModal} />;
 }

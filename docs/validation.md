@@ -6,7 +6,6 @@ Run these checks against the current checkout rather than relying on historical 
 
 ```sh
 npm ci
-npm --prefix web ci
 npm run format
 npm run check:all
 ```

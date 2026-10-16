@@ -1,13 +1,14 @@
 {
-  "description": "Format repository code after the main agent finishes editing.",
+  "description": "Format and lint repository code after Codex edits.",
   "hooks": {
-    "Stop": [
+    "PostToolUse": [
       {
+        "matcher": "^(apply_patch|Edit|Write)$",
         "hooks": [
           {
             "type": "command",
-            "command": "node --experimental-strip-types \"$(git rev-parse --show-toplevel)/scripts/hooks/agent-stop.ts\"",
-            "timeout": 150,
+            "command": "npm --prefix \"$(git rev-parse --show-toplevel)\" run --silent format >&2 || exit 2",
+            "timeout": 120,
             "statusMessage": "Formatting repository code"
           }
         ]

@@ -4,13 +4,13 @@ use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
 pub fn connection(manager: &Manager) -> Value {
-    match manager.backend.api("GET", "/user", None) {
-        Ok(user)
+    match manager.backend.user_with_scopes() {
+        Ok((user, scopes))
             if user["login"]
                 .as_str()
                 .is_some_and(|login| !login.trim().is_empty()) =>
         {
-            json!({"state":"connected", "connected":true, "login":user["login"], "message":"Using this Mac's GitHub CLI credentials"})
+            json!({"state":"connected", "connected":true, "login":user["login"], "name":user["name"], "avatar_url":user["avatar_url"], "scopes":scopes, "message":"Using this Mac's GitHub CLI credentials"})
         }
         Ok(_) => {
             json!({"state":"unavailable", "connected":false,"message":"GitHub did not return an account. Check the host's GitHub CLI authentication."})
@@ -100,5 +100,4 @@ pub fn capabilities(manager: &Manager, target: &Target) -> Value {
 }
 
 #[cfg(test)]
-#[path = "tests/account.rs"]
 mod tests;

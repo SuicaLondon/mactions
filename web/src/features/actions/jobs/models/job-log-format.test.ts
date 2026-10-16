@@ -91,3 +91,22 @@ it.each([
 ])('detects only explicit annotations in %j', (content, annotation) => {
   expect(parseJobLogLines(content)[0].annotation).toBe(annotation);
 });
+
+it('moves a leading GitHub UTC timestamp out of the visible text', () => {
+  const [line, blank, plain] = parseJobLogLines(
+    '2026-10-13T22:13:49.2989160Z \u001b[31m##[error]Build failed\n2026-10-13T22:13:50Z\nplain 2026-10-13T22:13:49Z',
+  );
+  expect(line.time).toEqual({ iso: '2026-10-13T22:13:49.2989160Z', label: '22:13:49' });
+  expect(line.annotation).toBe('error');
+  expect(line.parts).toEqual([{ text: '##[error]Build failed', style: { color: 'red' } }]);
+  expect(blank.time).toEqual({ iso: '2026-10-13T22:13:50Z', label: '22:13:50' });
+  expect(blank.parts).toEqual([]);
+  expect(plain.time).toBeUndefined();
+  expect(plain.parts.map((part) => part.text)).toEqual(['plain 2026-10-13T22:13:49Z']);
+});
+
+it('drops a timestamp that spans several styled parts', () => {
+  const [line] = parseJobLogLines('\u001b[2m2026-10-13T22:13:49Z\u001b[0m done');
+  expect(line.time?.label).toBe('22:13:49');
+  expect(line.parts).toEqual([{ text: 'done', style: {} }]);
+});

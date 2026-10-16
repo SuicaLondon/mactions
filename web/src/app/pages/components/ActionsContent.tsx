@@ -1,11 +1,17 @@
-import { JobHistory } from '../../../features/actions/history/components/list/JobHistory';
+import { JobHistory } from '../../../features/actions/history/components/JobHistory';
 import { RunDetail } from '../../../features/actions/runs/components/detail/RunDetail';
 import { RunsView } from '../../../features/actions/runs/components/list/RunsView';
-import { useNavigation } from '../../navigation/hooks/use-navigation';
+import { useCurrentPage } from '../../navigation/hooks/use-current-page';
+import { useRunSelectionUpdate } from '../../navigation/hooks/use-run-selection-update';
+import { useNavigationStore } from '../../navigation/stores/navigation-store';
 
 export function ActionsContent() {
-  const { page, preferences, updateRunSelection, openHistory, openRun, updateHistory } =
-    useNavigation();
+  const page = useCurrentPage();
+  const preferences = useNavigationStore((state) => state.preferences);
+  const openHistory = useNavigationStore((state) => state.openHistory);
+  const openRun = useNavigationStore((state) => state.openRun);
+  const updateHistory = useNavigationStore((state) => state.updateHistory);
+  const updateRunSelection = useRunSelectionUpdate();
   if (page.type === 'run') {
     return (
       <RunDetail
@@ -24,8 +30,8 @@ export function ActionsContent() {
         repository={page.repository}
         highlightRunnerId={page.runner?.githubId}
         onOpenRun={openRun}
-        status={page.status ?? 'all'}
-        onStatusChange={(status) => updateHistory({ status })}
+        statusFilter={page.status ?? 'all'}
+        onStatusFilterChange={(status) => updateHistory({ status })}
         expandedJobIds={page.expandedJobIds ?? []}
         onExpandedJobsChange={(expandedJobIds) => updateHistory({ expandedJobIds })}
       />
@@ -43,7 +49,7 @@ export function ActionsContent() {
       runnerId={runnerId}
       runnerName={runnerName}
       search={preferences.runSearch}
-      status={preferences.runStatus}
+      statusFilter={preferences.runStatus}
       onOpenRun={openRun}
     />
   );

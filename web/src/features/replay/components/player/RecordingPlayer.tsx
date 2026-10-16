@@ -1,25 +1,31 @@
-import { useRecordingPlayer } from '../../hooks/use-recording-player';
-import type { CIRecording } from '../../types/recording';
-import { RecordingControls } from './controls/RecordingControls';
+import { usePlaybackClock } from '../../hooks/use-playback-clock';
+import { playbackBounds } from '../../models/playback-clock';
+import { type CIRecording } from '../../types/recording';
+import { PlaybackTransport } from './PlaybackTransport';
 import { RecordingJobs } from './RecordingJobs';
+import { RecordingPlaybackCard } from './RecordingPlaybackCard';
 
 interface RecordingPlayerProps {
   recording: CIRecording;
 }
 
+/** Plays one recording: the playback controls above the jobs reported at the current moment. */
 export function RecordingPlayer({ recording }: RecordingPlayerProps) {
-  const player = useRecordingPlayer(recording);
+  const { clock, togglePlayback, seekTo, seekBy, setSpeed } = usePlaybackClock(
+    playbackBounds(recording),
+  );
   return (
-    <div className="replay-panel flex min-w-0 flex-col gap-4">
-      <RecordingControls recording={recording} player={player} />
-      <RecordingJobs
-        logs={player.logs}
-        frame={player.frame}
-        selectedJob={player.selectedJob}
-        setSelectedJobId={player.setSelectedJobId}
-        at={player.at}
-        recording={recording}
-      />
+    <div className="flex min-w-0 flex-col gap-4">
+      <RecordingPlaybackCard recording={recording} at={clock.at}>
+        <PlaybackTransport
+          clock={clock}
+          onTogglePlayback={togglePlayback}
+          onSeek={seekTo}
+          onSeekBy={seekBy}
+          onSpeedChange={setSpeed}
+        />
+      </RecordingPlaybackCard>
+      <RecordingJobs recording={recording} at={clock.at} />
     </div>
   );
 }

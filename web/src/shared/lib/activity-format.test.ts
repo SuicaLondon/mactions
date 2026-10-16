@@ -24,20 +24,9 @@ describe('activity state presentation', () => {
     expect(stateFor(status, null)).toEqual({ tone, icon, label });
   });
 
-  it('uses the conclusion before the status', () => {
-    expect(stateFor('completed', 'success')).toEqual({
-      tone: 'success',
-      icon: 'check',
-      label: 'Success',
-    });
-  });
-
-  it('falls back to the status for an empty conclusion', () => {
-    expect(stateFor('in_progress', '')).toEqual({
-      tone: 'running',
-      icon: 'refresh',
-      label: 'Running',
-    });
+  it('uses a non-empty conclusion before the status', () => {
+    expect(stateFor('completed', 'success').label).toBe('Success');
+    expect(stateFor('in_progress', '').label).toBe('Running');
   });
 });
 

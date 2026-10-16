@@ -1,5 +1,6 @@
 //! Job pagination, selected job details, and exact-name history.
 use super::{
+    cache::JobListKey,
     normalize::normalize_job,
     read::{
         has_next, page_number, parallel_reads, reached_run_limit, refresh_seconds, MAX_PAGES,
@@ -10,17 +11,43 @@ use crate::core::{Manager, Target};
 use anyhow::{ensure, Context, Result};
 use serde_json::{json, Value};
 
+/// Job lists without Steps for `run`, the Run or attempt metadata just read from GitHub.
 pub(super) fn run_jobs(
     manager: &Manager,
     repo: &str,
-    run_id: u64,
+    run: &Value,
     attempt: Option<u64>,
     all_attempts: bool,
 ) -> Result<Vec<Value>> {
-    run_jobs_counted(manager, repo, run_id, attempt, all_attempts).0
+    run_jobs_counted(manager, repo, run, attempt, all_attempts).0
 }
 
+/// Completed attempts reuse their remembered list and cost no GitHub reads.
 pub(super) fn run_jobs_counted(
+    manager: &Manager,
+    repo: &str,
+    run: &Value,
+    attempt: Option<u64>,
+    all_attempts: bool,
+) -> (Result<Vec<Value>>, usize) {
+    let Some(run_id) = run["id"].as_u64() else {
+        return (Err(anyhow::anyhow!("Run has no ID")), 0);
+    };
+    let key = attempt
+        .or_else(|| run["run_attempt"].as_u64())
+        .filter(|attempt| *attempt > 0 && run["status"].as_str() == Some("completed"))
+        .map(|known| JobListKey::new(repo, run_id, known, attempt.is_none() && all_attempts));
+    if let Some(jobs) = key.as_ref().and_then(|key| manager.job_lists.get(key)) {
+        return (Ok(jobs), 0);
+    }
+    let (jobs, reads) = fetch_run_jobs(manager, repo, run_id, attempt, all_attempts);
+    if let (Some(key), Ok(jobs)) = (key, &jobs) {
+        manager.job_lists.insert(key, jobs);
+    }
+    (jobs, reads)
+}
+
+fn fetch_run_jobs(
     manager: &Manager,
     repo: &str,
     run_id: u64,
@@ -54,7 +81,13 @@ pub(super) fn run_jobs_counted(
             let rows = response["jobs"]
                 .as_array()
                 .context("Invalid workflow jobs response")?;
-            jobs.extend(rows.iter().cloned());
+            jobs.extend(rows.iter().map(|job| {
+                let mut job = job.clone();
+                if let Some(object) = job.as_object_mut() {
+                    object.remove("steps");
+                }
+                job
+            }));
             let more = response["total_count"]
                 .as_u64()
                 .map(|total| total > jobs.len() as u64)
@@ -131,10 +164,7 @@ pub fn job_history(
         );
     }
     let histories = parallel_reads(rows, |raw| {
-        let Some(id) = raw["id"].as_u64() else {
-            return (Err(anyhow::anyhow!("Run has no ID")), 0);
-        };
-        run_jobs_counted(manager, &repo, id, None, true)
+        run_jobs_counted(manager, &repo, raw, None, true)
     });
     let mut reads = 1; // The workflow's paginated run list.
     for (raw, (items, job_reads)) in rows.iter().zip(histories) {

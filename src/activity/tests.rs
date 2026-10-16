@@ -471,8 +471,132 @@ fn broad_scopes_and_history_scans_slow_refresh_to_match_read_cost() {
         runs(&manager, &repo, 1, Some(42)).unwrap()["refresh_after_seconds"],
         42
     );
+    // Remembered Job lists of completed Runs cost no reads, so polling can return to its default.
     assert_eq!(
         job_history(&manager, "example/repo0", 9, "Build", 1).unwrap()["refresh_after_seconds"],
+        30
+    );
+    let fresh = Manager::new(manager.root.clone(), fake.clone()).unwrap();
+    assert_eq!(
+        job_history(&fresh, "example/repo0", 9, "Build", 1).unwrap()["refresh_after_seconds"],
         42
     );
+}
+
+fn job_list_reads(fake: &Fake) -> usize {
+    let requests = fake.requests.lock().unwrap();
+    requests
+        .iter()
+        .filter(|path| path.contains("/jobs?"))
+        .count()
+}
+
+#[test]
+fn completed_run_job_lists_are_reused_across_runner_pages_history_and_details() {
+    let (_dir, manager, fake) = fixture();
+    let repo = Scope::new(None, Some("example/repo")).unwrap();
+    fake.reply(
+        "/repos/example/repo/actions/runs?per_page=20&page=1",
+        json!({"total_count":1,"workflow_runs":[raw_run(8)]}),
+    );
+    fake.reply(
+        "/repos/example/repo/actions/workflows/9/runs?per_page=20&page=1",
+        json!({"total_count":1,"workflow_runs":[raw_run(8)]}),
+    );
+    fake.reply(
+        "/repos/example/repo/actions/runs/8/jobs?per_page=100&page=1&filter=all",
+        json!({"total_count":2,"jobs":[raw_job(70,42,"Build",1),raw_job(71,42,"Build",2)]}),
+    );
+    let first = runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 1);
+    let cached = runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 1);
+    assert_eq!(cached["runs"], first["runs"]);
+    let history = job_history(&manager, "example/repo", 9, "Build", 1).unwrap();
+    assert_eq!(job_list_reads(&fake), 1);
+    assert_eq!(history["jobs"].as_array().unwrap().len(), 2);
+    assert!(history["jobs"][0].get("steps").is_none());
+
+    // A single attempt is a different list from every attempt of the same Run.
+    fake.reply("/repos/example/repo/actions/runs/8", raw_run(8));
+    fake.reply(
+        "/repos/example/repo/actions/runs/8/jobs?per_page=100&page=1&filter=latest",
+        json!({"total_count":1,"jobs":[raw_job(71,42,"Build",2)]}),
+    );
+    fake.reply("/repos/example/repo/actions/runs/8/attempts/2", raw_run(8));
+    fake.reply(
+        "/repos/example/repo/actions/runs/8/attempts/2/jobs?per_page=100&page=1",
+        json!({"total_count":1,"jobs":[raw_job(71,42,"Build",2)]}),
+    );
+    assert_eq!(
+        run(&manager, "example/repo", 8, None).unwrap()["jobs"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(job_list_reads(&fake), 2);
+    // The latest attempt and its explicit attempt number share one remembered list.
+    assert_eq!(
+        run(&manager, "example/repo", 8, Some(2)).unwrap()["jobs"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(job_list_reads(&fake), 2);
+    assert_eq!(manager.job_lists.len(), 2);
+}
+
+#[test]
+fn unfinished_runs_and_new_attempts_always_reread_their_job_lists() {
+    let (_dir, manager, fake) = fixture();
+    let repo = Scope::new(None, Some("example/repo")).unwrap();
+    let mut running = raw_run(8);
+    running["status"] = json!("in_progress");
+    // GitHub can report a completed Run before every Job has settled.
+    let mut settling = raw_job(73, 42, "Test", 2);
+    settling["status"] = json!("in_progress");
+    fake.reply(
+        "/repos/example/repo/actions/runs?per_page=20&page=1",
+        json!({"total_count":2,"workflow_runs":[running,raw_run(9)]}),
+    );
+    fake.reply(
+        "/repos/example/repo/actions/runs/8/jobs?per_page=100&page=1&filter=all",
+        json!({"total_count":1,"jobs":[raw_job(70,42,"Build",2)]}),
+    );
+    fake.reply(
+        "/repos/example/repo/actions/runs/9/jobs?per_page=100&page=1&filter=all",
+        json!({"total_count":1,"jobs":[settling]}),
+    );
+    let first = runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 2);
+    let second = runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 4);
+    assert_eq!(
+        first["refresh_after_seconds"],
+        second["refresh_after_seconds"]
+    );
+    assert_eq!(manager.job_lists.len(), 0);
+
+    // Both finish; a later rerun of one starts a new attempt, which is not the remembered list.
+    fake.reply(
+        "/repos/example/repo/actions/runs/9/jobs?per_page=100&page=1&filter=all",
+        json!({"total_count":1,"jobs":[raw_job(73,42,"Test",2)]}),
+    );
+    fake.reply(
+        "/repos/example/repo/actions/runs?per_page=20&page=1",
+        json!({"total_count":2,"workflow_runs":[raw_run(8),raw_run(9)]}),
+    );
+    runs(&manager, &repo, 1, Some(42)).unwrap();
+    runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 6);
+    let mut rerun = raw_run(9);
+    rerun["run_attempt"] = json!(3);
+    fake.reply(
+        "/repos/example/repo/actions/runs?per_page=20&page=1",
+        json!({"total_count":2,"workflow_runs":[raw_run(8),rerun]}),
+    );
+    runs(&manager, &repo, 1, Some(42)).unwrap();
+    assert_eq!(job_list_reads(&fake), 7);
 }

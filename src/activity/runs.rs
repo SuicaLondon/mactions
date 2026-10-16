@@ -51,7 +51,7 @@ fn runner_attempts(
     let Some(id) = raw["id"].as_u64() else {
         return (Err(anyhow::anyhow!("Run has no ID")), 0);
     };
-    let (jobs, mut reads) = run_jobs_counted(manager, repo, id, None, true);
+    let (jobs, mut reads) = run_jobs_counted(manager, repo, raw, None, true);
     let result = (|| {
         let jobs = jobs?;
         let mut attempts = BTreeMap::<u64, Vec<Value>>::new();
@@ -266,7 +266,7 @@ pub fn run(
         "GitHub returned a different run"
     );
     let records = manager.records()?;
-    let jobs = run_jobs(manager, &repo, run_id, attempt, false)?;
+    let jobs = run_jobs(manager, &repo, &raw, attempt, false)?;
     let jobs: Vec<Value> = jobs
         .iter()
         .map(|job| normalize_job(job, &raw, &repo, &records, false))

@@ -21,7 +21,7 @@ export interface RunnerRowsOptions {
   scope: Scope;
   runners: Runner[];
   inventory: ActivityRunner[];
-  connected: boolean | undefined;
+  connected: boolean;
   inventoryReady: boolean;
   inventoryMessage: string;
 }
@@ -97,9 +97,15 @@ export function buildRunnerRows({
   return rows;
 }
 
+export interface RunnerRowFilters {
+  search: string;
+  status: string;
+  device: string;
+}
+
 export function filterRunnerRows(
   rows: DisplayRunner[],
-  { status, device, search }: { status: string; device: string; search: string },
+  { status, device, search }: RunnerRowFilters,
 ) {
   const query = search.trim().toLowerCase();
   return rows.filter((row) => {
@@ -123,4 +129,11 @@ export function filterRunnerRows(
         .includes(query)
     );
   });
+}
+
+/** Runners saved on this device, and how to reload them. */
+export interface LocalRunners {
+  runners: Runner[];
+  error?: string;
+  onRefresh: () => void;
 }

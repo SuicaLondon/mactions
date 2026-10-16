@@ -42,7 +42,7 @@ Runner installations, services, and data remain in `~/.mactions`. Remove individ
 Generate the formula after the release archive has been signed, notarized, and rebuilt with its final bytes:
 
 ```sh
-node --experimental-strip-types scripts/homebrew.ts dist/mactions-VERSION-macos-arm64.tar.gz
+node scripts/homebrew.ts dist/mactions-VERSION-macos-arm64.tar.gz
 ```
 
 The generator validates `manifest.json`, requires the manager and bundled GitHub CLI, computes the archive's SHA-256, and writes `dist/homebrew/Formula/mactions.rb`. It accepts an optional output filename as the second argument. Without arguments it uses the package path from `scripts/shared/paths.ts`.

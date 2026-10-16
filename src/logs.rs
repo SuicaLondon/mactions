@@ -130,10 +130,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let manager = Manager::new(
             temp.path().into(),
-            Arc::new(Native {
-                root: temp.path().into(),
-                gh: "/missing".into(),
-            }),
+            Arc::new(Native::new(temp.path().into(), "/missing".into())),
         )
         .unwrap();
         let path = manager.root.join("actions-runner-1");

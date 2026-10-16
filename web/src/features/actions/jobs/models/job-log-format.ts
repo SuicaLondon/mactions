@@ -11,8 +11,18 @@ interface LogPart {
   style: LogStyle;
 }
 
+/** A GitHub UTC line timestamp, removed from the visible line text. */
+export interface LogTime {
+  /** The original ISO timestamp, such as `2026-10-13T22:13:49.2989160Z`. */
+  iso: string;
+  /** The UTC wall-clock time, such as `22:13:49`. */
+  label: string;
+}
+
 export interface LogLine {
+  /** Visible line text, without a leading GitHub timestamp. */
   parts: LogPart[];
+  time?: LogTime;
   annotation?: 'error' | 'warning' | 'group' | 'command';
   newline: boolean;
 }
@@ -118,6 +128,30 @@ function annotationFor(text: string): LogLine['annotation'] {
   if (/^##?\[command\]/i.test(message)) return 'command';
 }
 
+const timestampPrefix = /^(\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})(?:\.\d+)?Z)(?:\s+|$)/;
+
+function dropLeadingText(parts: LogPart[], length: number) {
+  const kept: LogPart[] = [];
+  let remaining = length;
+  for (const part of parts) {
+    if (remaining >= part.text.length) {
+      remaining -= part.text.length;
+      continue;
+    }
+    kept.push({ text: part.text.slice(remaining), style: part.style });
+    remaining = 0;
+  }
+  return kept;
+}
+
+/** Moves a leading GitHub UTC timestamp out of the visible line text. */
+function extractTime(line: LogLine, text: string) {
+  const match = timestampPrefix.exec(text);
+  if (!match) return;
+  line.time = { iso: match[1], label: match[2] };
+  line.parts = dropLeadingText(line.parts, match[0].length);
+}
+
 export function parseJobLogLines(content: string): LogLine[] {
   let currentLine: LogLine = { parts: [], newline: false };
   const lines = [currentLine];
@@ -146,8 +180,10 @@ export function parseJobLogLines(content: string): LogLine[] {
   append(content.slice(offset));
   if (lines.length > 1 && !currentLine.parts.length) lines.pop();
   for (const line of lines) {
-    const annotation = annotationFor(line.parts.map((part) => part.text).join(''));
+    const text = line.parts.map((part) => part.text).join('');
+    const annotation = annotationFor(text);
     if (annotation) line.annotation = annotation;
+    extractTime(line, text);
   }
   return lines;
 }

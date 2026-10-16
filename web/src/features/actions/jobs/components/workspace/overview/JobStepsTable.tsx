@@ -1,108 +1,71 @@
+import { Fragment } from 'react';
+
+import type { Job } from '../../../../../../shared/api/types';
 import { duration, stateFor } from '../../../../../../shared/lib/activity-format';
 import { cn } from '../../../../../../shared/lib/cn';
-import { ChevronIcon } from '../../../../../../shared/ui/icons/navigation/ChevronIcon';
+import { ChevronIcon } from '../../../../../../shared/ui/icons/ChevronIcon';
 import { Status } from '../../../../shared/components/Status';
-import { type JobWorkspaceDetail } from '../JobWorkspaceDetail';
+import { StepsTable } from '../../../../shared/components/table/StepsTable';
+import { StepsTableRow } from '../../../../shared/components/table/StepsTableRow';
+import { hiddenStepsBefore } from '../../../models/hidden-steps';
 
 export function JobStepsTable({
   job,
   onSelectStep,
 }: {
-  job: Parameters<typeof JobWorkspaceDetail>[0]['job'];
-  onSelectStep: Parameters<typeof JobWorkspaceDetail>[0]['onSelectStep'];
+  job: Job;
+  onSelectStep: (number: number) => void;
 }) {
+  if (!job.steps.length) {
+    return (
+      <p className="m-0 p-5 text-xs text-muted">GitHub has not reported any steps for this job.</p>
+    );
+  }
   return (
-    <table className="job-overview-steps w-full table-auto border-collapse text-xs">
-      <caption
-        className={cn(
-          'border-t border-t-line px-0 pt-2.25 pb-1.75 text-left text-xs font-medium',
-          'text-muted',
-        )}
-      >
-        Steps in this job
-      </caption>
-      <thead className="static">
-        <tr className="bg-transparent">
-          <th
-            className={cn(
-              'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75',
-              'whitespace-normal text-muted first:w-2/3 last:text-right last:whitespace-nowrap',
-              'last:tabular-nums',
+    <StepsTable
+      caption="Steps in this job"
+      captionClassName="border-t border-t-line pt-2.25 font-medium"
+    >
+      {job.steps.map((item, index) => {
+        const stepState = stateFor(item.status, item.conclusion);
+        const elapsed = duration(item.started_at, item.completed_at, item.status === 'in_progress');
+        const hidden = hiddenStepsBefore(job.steps, index);
+        let hiddenLabel = `${hidden} steps not reported by GitHub`;
+        if (hidden === 1) hiddenLabel = '1 step not reported by GitHub';
+        return (
+          <Fragment key={item.number}>
+            {hidden > 0 && (
+              <tr className="bg-transparent">
+                <td
+                  className="border-b border-b-line px-0 py-1.25 pl-5.5 text-xs text-muted"
+                  colSpan={3}
+                >
+                  {hiddenLabel}
+                </td>
+              </tr>
             )}
-            scope="col"
-          >
-            Step
-          </th>
-          <th
-            className={cn(
-              'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75',
-              'whitespace-normal text-muted first:w-2/3 last:text-right last:whitespace-nowrap',
-              'last:tabular-nums',
-            )}
-            scope="col"
-          >
-            Result
-          </th>
-          <th
-            className={cn(
-              'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75',
-              'whitespace-normal text-muted first:w-2/3 last:text-right last:whitespace-nowrap',
-              'last:tabular-nums',
-            )}
-            scope="col"
-          >
-            Duration
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {job.steps.map((item) => {
-          const stepState = stateFor(item.status, item.conclusion);
-          return (
-            <tr className="bg-transparent" key={item.number}>
-              <th
-                className={cn(
-                  'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75 text-xs',
-                  'font-normal whitespace-normal first:w-2/3 last:text-right last:whitespace-nowrap',
-                  'text-foreground last:tabular-nums',
-                )}
-                scope="row"
-              >
+            <StepsTableRow
+              name={
                 <button
                   className={cn(
                     'flex min-h-6 w-full items-center justify-start gap-2 border-0 bg-transparent p-0',
+                    'max-md:min-h-10 pointer-coarse:min-h-10',
                     'pr-2 text-left text-xs whitespace-normal text-foreground shadow-none',
                   )}
-                  aria-label={`${item.name}, ${stepState.label}, ${duration(item.started_at, item.completed_at, item.status === 'in_progress')}`}
+                  aria-label={`${item.name}, ${stepState.label}, ${elapsed}`}
                   onClick={() => onSelectStep(item.number)}
                 >
                   <span className="min-w-3.5 text-xs text-muted">{item.number}</span>
                   {item.name}
                   <ChevronIcon className="ml-auto size-3 shrink-0 text-muted" />
                 </button>
-              </th>
-              <td
-                className={cn(
-                  'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75',
-                  'whitespace-normal text-muted last:text-right last:whitespace-nowrap',
-                  'last:tabular-nums',
-                )}
-              >
-                <Status status={item.status} conclusion={item.conclusion} />
-              </td>
-              <td
-                className={cn(
-                  'table-cell h-auto border-b border-b-line bg-transparent px-0 py-1.75',
-                  'whitespace-normal text-muted last:text-right last:whitespace-nowrap',
-                  'last:tabular-nums',
-                )}
-              >
-                {duration(item.started_at, item.completed_at, item.status === 'in_progress')}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+              }
+              result={<Status status={item.status} conclusion={item.conclusion} />}
+              duration={elapsed}
+            />
+          </Fragment>
+        );
+      })}
+    </StepsTable>
   );
 }

@@ -40,12 +40,18 @@ export interface Operation {
   path: string;
   payload: unknown;
   message: string;
+  /** Confirmation shown when the operation succeeds. */
+  success?: string;
 }
 export type Filter = 'all' | 'active' | 'stopped' | 'attention';
 
 export interface Connection {
   connected: boolean;
   login?: string;
+  name?: string | null;
+  avatar_url?: string | null;
+  /** Classic OAuth scopes; null when the token type does not report them. */
+  scopes?: string[] | null;
   message: string;
   state?: 'connected' | 'disconnected' | 'unavailable';
 }

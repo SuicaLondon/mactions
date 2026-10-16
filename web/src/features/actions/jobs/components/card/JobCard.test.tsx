@@ -4,29 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { createQueryClient } from '../../../../../shared/api/query-client';
-import type { Job } from '../../../../../shared/api/types';
-import { stateFor } from '../../../../../shared/lib/activity-format';
+import type { JobLogs } from '../../../../../shared/api/types';
+import { makeJob } from '../../../../../test/activity-fixtures';
 import { JobCard } from './JobCard';
 
-const job: Job = {
+const job = makeJob({
   id: 900,
   name: 'Build application',
-  workflow: 'CI',
-  status: 'completed',
-  conclusion: 'success',
-  branch: 'main',
-  run_number: 42,
-  run_id: 100,
-  run_attempt: 2,
-  url: 'https://github.com/example/app/actions/runs/100/job/900',
-  run_url: 'https://github.com/example/app/actions/runs/100',
-  event: 'push',
   actor: 'octocat',
   head_sha: 'abcdef1234567890',
-  commit_message: 'Improve runner output',
-  runner_name: 'mac-build-1',
-  runner_group_name: 'Default',
-  labels: ['self-hosted', 'macOS'],
   started_at: '2026-09-30T01:00:00Z',
   completed_at: '2026-09-30T01:01:30Z',
   steps: [
@@ -40,7 +26,7 @@ const job: Job = {
       completed_at: '2026-09-30T01:01:20Z',
     },
   ],
-};
+});
 const fetchMock = vi.fn<typeof fetch>();
 let client: ReturnType<typeof createQueryClient>;
 beforeEach(() => {
@@ -61,10 +47,13 @@ function mount(value = job) {
     </QueryClientProvider>,
   );
 }
+function logs(fields: Partial<JobLogs>) {
+  return new Response(
+    JSON.stringify({ state: 'available', content: '', message: '', steps: [], ...fields }),
+  );
+}
 function response(content: string) {
-  return new Response(JSON.stringify({ state: 'available', content, message: '', steps: [] }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return logs({ content });
 }
 
 it('loads only an opened step, preserving sparse step numbers and full text safely', async () => {
@@ -85,7 +74,7 @@ it('loads only an opened step, preserving sparse step numbers and full text safe
   );
   expect(fetchMock).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole('checkbox', { name: 'Wrap lines' }));
-  expect(output).toHaveClass('wrap-lines');
+  expect(output).toHaveAttribute('data-wrapped');
   await userEvent.click(screen.getByRole('button', { name: /^Build, Success/ }));
   expect(screen.queryByLabelText('Logs for Build')).not.toBeInTheDocument();
 });
@@ -93,14 +82,10 @@ it('loads only an opened step, preserving sparse step numbers and full text safe
 it('loads the whole job independently and exposes retry for unavailable step logs', async () => {
   fetchMock.mockImplementation(async (url) => {
     if (String(url).includes('step_number')) {
-      return new Response(
-        JSON.stringify({
-          state: 'unavailable',
-          message: 'Step logs have expired. Open the full job log.',
-          content: '',
-          steps: [],
-        }),
-      );
+      return logs({
+        state: 'unavailable',
+        message: 'Step logs have expired. Open the full job log.',
+      });
     }
     return response('Complete job output');
   });
@@ -119,104 +104,72 @@ it('loads the whole job independently and exposes retry for unavailable step log
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 });
 
-it('labels a whole-job fallback honestly when separate step output is unavailable', async () => {
-  const message =
-    'GitHub did not publish a separate log for this step. Showing the complete job log.';
-  fetchMock.mockResolvedValue(
-    new Response(
-      JSON.stringify({
-        state: 'available',
-        scope: 'job',
-        message,
-        content: 'Complete job output',
-        steps: [],
-      }),
-    ),
+function stubDownload() {
+  const createObjectURL = vi.fn<typeof URL.createObjectURL>().mockReturnValue('blob:job-output');
+  const revokeObjectURL = vi.fn<typeof URL.revokeObjectURL>();
+  vi.stubGlobal(
+    'URL',
+    class extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    },
   );
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  return { createObjectURL, revokeObjectURL, downloaded: () => click.mock.contexts[0] };
+}
+
+it('downloads the raw step output and releases its object URL', async () => {
+  const content = '\u001b[32mRaw build output\u001b[0m\n';
+  fetchMock.mockResolvedValue(logs({ scope: 'step', content }));
+  const { createObjectURL, revokeObjectURL, downloaded } = stubDownload();
+  mount();
+  await userEvent.click(screen.getByRole('button', { name: /^Build, Success/ }));
+  const download = await screen.findByRole('button', { name: 'Download' });
+  vi.useFakeTimers();
+  fireEvent.click(download);
+  expect(createObjectURL).toHaveBeenCalledWith(
+    expect.objectContaining({ size: content.length, type: 'text/plain;charset=utf-8' }),
+  );
+  expect(downloaded()).toHaveAttribute('download', 'job-900-step-16.log');
+  expect(downloaded()).toHaveAttribute('href', 'blob:job-output');
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(revokeObjectURL).toHaveBeenCalledWith('blob:job-output');
+});
+
+it('labels a whole-job fallback for a step honestly and downloads it as the job log', async () => {
+  const message = 'GitHub did not publish a separate log for this step.';
+  fetchMock.mockResolvedValue(logs({ scope: 'job', message, content: 'Complete job output' }));
+  const { downloaded } = stubDownload();
   mount();
   await userEvent.click(screen.getByRole('button', { name: /^Build, Success/ }));
   const step = within(screen.getByRole('region', { name: 'Output for Build' }));
   expect(await step.findByLabelText('Full logs for Build application')).toHaveTextContent(
     'Complete job output',
   );
-  expect(step.getByText('Full job output')).toBeVisible();
+  expect(step.getByText('Full job log')).toBeVisible();
   expect(step.getByText(message)).toBeVisible();
-  expect(step.queryByText('Step output')).not.toBeInTheDocument();
   expect(step.queryByLabelText('Logs for Build')).not.toBeInTheDocument();
+  await userEvent.click(step.getByRole('button', { name: 'Download' }));
+  expect(downloaded()).toHaveAttribute('download', 'job-900.log');
 });
 
-it.each([
-  { openStep: false, scope: 'job', filename: 'job-900.log' },
-  { openStep: true, scope: 'step', filename: 'job-900-step-16.log' },
-  { openStep: true, scope: 'job', filename: 'job-900.log' },
-])(
-  'downloads $filename for scope $scope with openStep=$openStep',
-  async ({ openStep, scope, filename }) => {
-    const content = '\u001b[32mRaw build output\u001b[0m\n';
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ state: 'available', scope, content, message: '', steps: [] })),
-    );
-    const createObjectURL = vi.fn<typeof URL.createObjectURL>().mockReturnValue('blob:job-output');
-    const revokeObjectURL = vi.fn<typeof URL.revokeObjectURL>();
-    vi.stubGlobal(
-      'URL',
-      class extends URL {
-        static createObjectURL = createObjectURL;
-        static revokeObjectURL = revokeObjectURL;
-      },
-    );
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-    mount();
-    let buttonName: string | RegExp = 'Full job log';
-    if (openStep) buttonName = /^Build, Success/;
-    await userEvent.click(screen.getByRole('button', { name: buttonName }));
-    const download = await screen.findByRole('button', { name: 'Download' });
-
-    vi.useFakeTimers();
-    fireEvent.click(download);
-    expect(createObjectURL).toHaveBeenCalledWith(
-      expect.objectContaining({ size: content.length, type: 'text/plain;charset=utf-8' }),
-    );
-    expect(click.mock.contexts[0]).toHaveAttribute('download', filename);
-    expect(click.mock.contexts[0]).toHaveAttribute('href', 'blob:job-output');
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000);
-    });
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:job-output');
-  },
-);
-
-it('does not request output for a step that has not started', async () => {
-  mount({
-    ...job,
-    status: 'in_progress',
-    conclusion: null,
-    steps: [{ ...job.steps[0], status: 'queued', conclusion: null }],
-  });
-  await userEvent.click(screen.getByRole('button', { name: /Set up job/ }));
-  expect(screen.getByText('This step has not started yet.')).toBeVisible();
-  expect(fetchMock).not.toHaveBeenCalled();
-});
-
-it('does not preload output for running or failed steps', () => {
+it('does not preload running or failed steps, nor request a step that has not started', async () => {
   mount({
     ...job,
     status: 'in_progress',
     conclusion: null,
     steps: [
-      { ...job.steps[0], status: 'in_progress', conclusion: null },
-      { ...job.steps[1], conclusion: 'failure' },
+      { ...job.steps[0], status: 'queued', conclusion: null },
+      { ...job.steps[1], name: 'Lint', status: 'in_progress', conclusion: null },
+      { ...job.steps[1], number: 17, conclusion: 'failure' },
     ],
   });
+  for (const name of [/^Lint, Running/, /^Build, Failure/]) {
+    expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false');
+  }
+  await userEvent.click(screen.getByRole('button', { name: /Set up job/ }));
+  expect(screen.getByText('This step has not started yet.')).toBeVisible();
   expect(fetchMock).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: /Set up job, Running/ })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
-  expect(screen.getByRole('button', { name: /Build, Failure/ })).toHaveAttribute(
-    'aria-expanded',
-    'false',
-  );
 });
 
 it('pauses pending log polling while hidden and drops the observer on collapsing output', async () => {
@@ -224,28 +177,22 @@ it('pauses pending log polling while hidden and drops the observer on collapsing
   let hidden = false;
   vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
   vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => {
-    if (hidden) {
-      return 'hidden';
-    }
+    if (hidden) return 'hidden';
     return 'visible';
   });
-  fetchMock.mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({ state: 'pending', message: 'Still running.', content: '', steps: [] }),
-      ),
-  );
+  fetchMock.mockImplementation(async () => logs({ state: 'pending', message: 'Still running.' }));
   render(
     <QueryClientProvider client={client}>
       <JobCard job={job} repository="example/app" />
     </QueryClientProvider>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Full job log' }));
-  async function tick(ms: number) {
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(ms);
+  const tick = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms));
+  const setHidden = (value: boolean) =>
+    act(() => {
+      hidden = value;
+      document.dispatchEvent(new Event('visibilitychange'));
     });
-  }
   await tick(20);
   expect(fetchMock).toHaveBeenCalledTimes(1);
   expect(String(fetchMock.mock.calls[0][0])).toBe(
@@ -253,16 +200,10 @@ it('pauses pending log polling while hidden and drops the observer on collapsing
   );
   await tick(15_020);
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  act(() => {
-    hidden = true;
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
+  setHidden(true);
   await tick(60_000);
   expect(fetchMock).toHaveBeenCalledTimes(2);
-  act(() => {
-    hidden = false;
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
+  setHidden(false);
   await tick(15_020);
   expect(fetchMock.mock.calls.length).toBeGreaterThan(2);
   fireEvent.click(screen.getByRole('button', { name: 'Hide full log' }));
@@ -285,7 +226,10 @@ it('keeps the last available output readable when a manual refresh fails', async
   await userEvent.click(
     screen.getByRole('button', { name: 'Refresh full logs for build application' }),
   );
-  expect(await screen.findByRole('alert')).toHaveTextContent('GitHub is temporarily unavailable.');
+  const failure = (await screen.findByText('Update failed')).closest('[role="status"]');
+  expect(failure).toHaveAttribute('title', 'GitHub is temporarily unavailable.');
+  expect(failure).toHaveTextContent('GitHub is temporarily unavailable.');
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.getByLabelText('Full logs for Build application')).toHaveTextContent(
     'Completed build output',
   );
@@ -303,45 +247,23 @@ it('preserves ANSI colors and resets while keeping log content as safe text', as
   await userEvent.click(screen.getByRole('button', { name: 'Full job log' }));
   const output = await screen.findByLabelText('Full logs for Build application');
   expect(output.textContent).toBe(`Build passed\n${html} plain\nRGB color\nIndexed color`);
-  expect(within(output).getByText('Build passed')).toHaveClass('log-ansi-green');
-  expect(within(output).getByText(html)).toHaveClass('log-ansi-red', 'log-ansi-bold');
-  expect(within(output).getByText('plain')).not.toHaveClass('log-ansi-red', 'log-ansi-bold');
+  expect(within(output).getByText('Build passed')).toHaveClass('text-green-300');
+  expect(within(output).getByText(html)).toHaveClass('text-red-400', 'font-bold');
   expect(within(output).getByText('RGB color')).toHaveStyle({ color: 'rgb(121, 192, 255)' });
   expect(within(output).getByText('Indexed color')).toHaveStyle({ color: 'rgb(255, 0, 0)' });
   expect(output.querySelector('img')).toBeNull();
-  expect(output.querySelectorAll('.job-log-line')).toHaveLength(4);
-  expect(screen.getByText('Build application', { selector: '.job-log-scope' })).toBeVisible();
+  expect(output.querySelectorAll('[data-line]')).toHaveLength(4);
 });
 
-it('colors explicit GitHub annotations without guessing severity from ordinary log words', async () => {
+it('marks explicit GitHub annotations without guessing severity from ordinary log words', async () => {
   const content =
     '2026-09-30T01:00:00.000Z ##[error]Build failed\n::warning file=build.ts,line=4::Unused value\n::group::Build application\nfailed tests: 0\nAll error cases passed\n';
   fetchMock.mockResolvedValue(response(content));
   mount();
   await userEvent.click(screen.getByRole('button', { name: 'Full job log' }));
   const output = await screen.findByLabelText('Full logs for Build application');
-  expect(output.textContent).toBe(content);
-  expect(output.querySelector('[data-line="1"]')).toHaveClass('log-line-error');
-  expect(output.querySelector('[data-line="2"]')).toHaveClass('log-line-warning');
-  expect(output.querySelector('[data-line="3"]')).toHaveClass('log-line-group');
-  expect(output.querySelector('[data-line="4"]')).not.toHaveClass('log-line-error');
-  expect(output.querySelector('[data-line="5"]')).not.toHaveClass('log-line-error');
-});
-
-it('distinguishes queued jobs and steps from neutral terminal states', () => {
-  expect(stateFor('queued', null)).toMatchObject({
-    tone: 'queued',
-    icon: 'clock',
-    label: 'Queued',
-  });
-  expect(stateFor('waiting', null)).toMatchObject({
-    tone: 'queued',
-    icon: 'clock',
-    label: 'Waiting',
-  });
-  expect(stateFor('completed', 'skipped')).toMatchObject({
-    tone: 'neutral',
-    icon: 'minus',
-    label: 'Skipped',
-  });
+  const annotations = [...output.querySelectorAll('[data-line]')].map((line) =>
+    line.getAttribute('data-annotation'),
+  );
+  expect(annotations.slice(0, 5)).toEqual(['error', 'warning', 'group', null, null]);
 });

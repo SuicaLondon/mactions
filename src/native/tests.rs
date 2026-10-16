@@ -1,50 +1,67 @@
-use super::{commands::checked, Native};
+use super::{
+    commands::checked,
+    test_api::{serve, Reply, Seen},
+    Native,
+};
 use crate::core::{Backend, Runner};
 use serde_json::json;
 use std::os::unix::fs::PermissionsExt;
-use std::{fs, path::Path, process::Command};
+use std::{
+    fs,
+    path::Path,
+    process::Command,
+    sync::{Arc, Mutex},
+};
 use tempfile::TempDir;
 
 fn fixture(script: &str) -> (TempDir, Native) {
+    api_fixture(script, |_| Reply::status(500, "unexpected API request"))
+}
+
+fn api_fixture(
+    script: &str,
+    handler: impl Fn(&Seen) -> Reply + Send + 'static,
+) -> (TempDir, Native) {
     let root = TempDir::new().unwrap();
     let gh = root.path().join("gh");
     fs::write(
         &gh,
         format!(
-            "#!/bin/bash\nset -eu\ncd '{}'\n{script}\n",
+            "#!/bin/bash\nset -eu\ncd '{}'\nif [ \"$1\" = auth ]; then printf '%s\\n' \"$*\" >> token-reads; echo fixture-token; exit; fi\n{script}\n",
             root.path().display()
         ),
     )
     .unwrap();
     fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
-    let native = Native {
-        root: root.path().into(),
-        gh,
-    };
+    let native = Native::with_api_base(root.path().into(), gh, &serve(handler));
     (root, native)
 }
 #[test]
 fn all_pages_are_used_for_name_and_identity_lookup() {
-    let (root, native) = fixture("printf '%s\\n' \"$*\" >> requests\ncase \"${!#}\" in *page=1) cat page1.json;; *) cat page2.json;; esac");
-    fs::write(
-        root.path().join("page1.json"),
-        json!({"runners":(0..100).map(|id|json!({"id":id})).collect::<Vec<_>>()} ).to_string(),
-    )
-    .unwrap();
-    fs::write(
-        root.path().join("page2.json"),
-        json!({"runners":[{"id":101,"name":"last-page"}]}).to_string(),
-    )
-    .unwrap();
+    let (root, native) = api_fixture("exit 1", |seen| {
+        assert_eq!(seen.authorization, "token fixture-token");
+        assert_eq!(seen.api_version, "2022-11-28");
+        if seen.path.ends_with("page=1") {
+            return Reply::json(
+                json!({"runners":(0..100).map(|id|json!({"id":id})).collect::<Vec<_>>()}),
+            );
+        }
+        Reply::json(json!({"runners":[{"id":101,"name":"last-page"}]}))
+    });
     let result = native
         .api("GET", "/orgs/example/actions/runners?per_page=100", None)
         .unwrap();
     assert_eq!(result["runners"].as_array().unwrap().len(), 101);
     assert_eq!(result["runners"][100]["name"], "last-page");
+    // Both pages reuse one token read from GitHub CLI.
+    let reads = fs::read_to_string(root.path().join("token-reads")).unwrap();
+    assert_eq!(reads, "auth token --hostname github.com\n");
 }
 #[test]
 fn inaccessible_target_does_not_count_as_successful_deregistration() {
-    let (_root, native) = fixture("echo 'HTTP 404: Not Found' >&2; exit 1");
+    let (_root, native) = api_fixture("exit 1", |_| {
+        Reply::status(404, r#"{"message":"Not Found"}"#)
+    });
     assert!(native
         .api("DELETE", "/repos/example/build/actions/runners/42", None)
         .unwrap_err()
@@ -53,13 +70,16 @@ fn inaccessible_target_does_not_count_as_successful_deregistration() {
 }
 #[test]
 fn deletion_is_idempotent_only_after_an_authenticated_list() {
-    let (root, native) = fixture("printf '%s\\n' \"$*\" >> requests\necho '{\"runners\":[]}'");
+    let methods = Arc::new(Mutex::new(vec![]));
+    let seen_methods = methods.clone();
+    let (_root, native) = api_fixture("exit 1", move |seen| {
+        seen_methods.lock().unwrap().push(seen.method.clone());
+        Reply::json(json!({"runners":[]}))
+    });
     native
         .api("DELETE", "/repos/example/build/actions/runners/42", None)
         .unwrap();
-    let requests = fs::read_to_string(root.path().join("requests")).unwrap();
-    assert!(requests.contains("--method GET"));
-    assert!(!requests.contains("--method DELETE"));
+    assert_eq!(*methods.lock().unwrap(), ["GET"]);
 }
 #[test]
 fn recovers_official_runner_identity_with_utf8_bom() {
@@ -87,7 +107,11 @@ fn recovers_official_runner_identity_with_utf8_bom() {
 }
 #[test]
 fn configuration_errors_redact_registration_tokens() {
-    let (root, native) = fixture("echo '{\"token\":\"secret-fixture-token\"}'");
+    let (root, native) = api_fixture("exit 1", |seen| {
+        assert_eq!(seen.method, "POST");
+        assert!(seen.body.is_empty());
+        Reply::json(json!({"token":"secret-fixture-token"}))
+    });
     let path = root.path().join("actions-runner-1");
     fs::create_dir(&path).unwrap();
     fs::write(
@@ -155,6 +179,24 @@ fn log_download_failure_never_exposes_raw_cli_output() {
 }
 
 #[test]
+fn missing_organization_scope_explains_how_to_authorize() {
+    let (_root, native) = api_fixture("exit 1", |_| {
+        Reply::status(
+            403,
+            r#"{"message":"Must have admin rights to Repository."}"#,
+        )
+        .header("X-Accepted-OAuth-Scopes", "admin:org")
+        .header("X-OAuth-Scopes", "gist, repo")
+    });
+    let error = native
+        .api("GET", "/orgs/example/actions/runners?per_page=100", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("admin:org scope"));
+    assert!(error.contains("gh auth refresh -h github.com -s admin:org"));
+}
+
+#[test]
 fn step_fallback_isolates_and_removes_the_cli_archive_cache() {
     let (root, native) = fixture("printf '%s' \"$XDG_CACHE_HOME\" > cache-path\nprintf '%s' \"$*\" > arguments\nprintf 'archive' > \"$XDG_CACHE_HOME/private-log\"\nprintf 'Build\\tTests\\toutput\\n'");
     assert_eq!(
@@ -165,4 +207,47 @@ fn step_fallback_isolates_and_removes_the_cli_archive_cache() {
     assert!(!Path::new(&cache).exists());
     let args = fs::read_to_string(root.path().join("arguments")).unwrap();
     assert!(args.contains("--attempt 2"));
+}
+
+#[test]
+fn connection_reports_classic_oauth_scopes() {
+    let (_root, native) = api_fixture("exit 1", |_| {
+        Reply::json(json!({"login":"octo"})).header("X-OAuth-Scopes", "admin:org, gist, repo")
+    });
+    let (user, scopes) = native.user_with_scopes().unwrap();
+    assert_eq!(user["login"], "octo");
+    assert_eq!(scopes.unwrap(), ["admin:org", "gist", "repo"]);
+}
+
+#[test]
+fn fine_grained_tokens_report_no_scope_list() {
+    let (_root, native) = api_fixture("exit 1", |_| Reply::json(json!({"login":"octo"})));
+    assert!(native.user_with_scopes().unwrap().1.is_none());
+}
+
+#[test]
+fn rejected_cached_token_is_reread_once_before_reporting_sign_in() {
+    let (root, native) = api_fixture("exit 1", |_| Reply::status(401, "{}"));
+    let error = native
+        .api("GET", "/user/orgs", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("mactions auth login"));
+    let reads = fs::read_to_string(root.path().join("token-reads")).unwrap();
+    assert_eq!(reads.lines().count(), 2);
+}
+
+#[test]
+fn missing_cli_sign_in_is_reported_without_a_request() {
+    let (_root, native) = fixture("exit 1");
+    fs::write(
+        &native.gh,
+        "#!/bin/sh\necho 'no oauth token found' >&2\nexit 1\n",
+    )
+    .unwrap();
+    let error = native
+        .api("GET", "/user/orgs", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("mactions auth login"));
 }

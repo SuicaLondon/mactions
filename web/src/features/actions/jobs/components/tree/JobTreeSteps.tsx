@@ -1,41 +1,43 @@
-import type { Job } from '../../../../../shared/api/types';
-import type { JobSummary } from '../../../data/types/activity-types';
-import { type useJobTree } from '../../hooks/use-job-tree';
+import { type ReactNode } from 'react';
+
+import { type Job } from '../../../../../shared/api/types';
+import { Skeleton } from '../../../../../shared/ui/loading/components/Skeleton';
 import type { JobSelection } from '../../types/job-selection';
-import { JobStepsPlaceholder } from './JobStepsPlaceholder';
+import { JobStepsSkeleton } from '../workspace/overview/JobStepsSkeleton';
 import { JobTreeStep } from './JobTreeStep';
 
 export function JobTreeSteps({
+  jobId,
   detail,
-  selectedJob,
-  selected,
-  node,
-  focused,
-  setFocused,
-  keyboard,
-  job,
-  onSelect,
+  selection,
+  tabbable,
 }: {
+  jobId: number;
+  /** The loaded job with its steps; steps load once the job is selected. */
   detail: Job | undefined;
-  selectedJob: boolean;
-  node: string;
-  job: JobSummary;
-  focused: string | null;
-  setFocused: (node: string) => void;
-  keyboard: ReturnType<typeof useJobTree>['keyboard'];
-  selected: JobSelection | null;
-  onSelect: (selection: JobSelection) => void;
+  /** The tree's selection, given only when it is this job or one of its steps. */
+  selection: JobSelection | undefined;
+  /** The `data-node` id of the row that takes Tab focus. */
+  tabbable: string;
 }) {
   if (!detail) {
+    let placeholder: ReactNode = 'Select this job to load steps';
+    if (selection) {
+      placeholder = (
+        <Skeleton label="Loading steps…">
+          <JobStepsSkeleton />
+        </Skeleton>
+      );
+    }
     return (
-      <li className="job-tree-note pt-1.75 pr-2.5 pb-1.75 pl-0 text-xs text-muted" role="none">
-        <JobStepsPlaceholder selectedJob={selectedJob} />
+      <li className="py-1.75 pr-2.5 pl-0 text-xs text-muted" role="none">
+        {placeholder}
       </li>
     );
   }
   if (!detail.steps.length) {
     return (
-      <li className="job-tree-note pt-1.75 pr-2.5 pb-1.75 pl-0 text-xs text-muted" role="none">
+      <li className="py-1.75 pr-2.5 pl-0 text-xs text-muted" role="none">
         No steps reported
       </li>
     );
@@ -43,17 +45,11 @@ export function JobTreeSteps({
   return detail.steps.map((step, stepIndex) => (
     <JobTreeStep
       key={step.number}
+      jobId={jobId}
       step={step}
-      stepIndex={stepIndex}
-      count={detail.steps.length}
-      selectedJob={selectedJob}
-      selected={selected}
-      node={node}
-      focused={focused}
-      setFocused={setFocused}
-      keyboard={keyboard}
-      job={job}
-      onSelect={onSelect}
+      position={{ index: stepIndex, count: detail.steps.length }}
+      selected={selection?.stepNumber === step.number}
+      tabbable={tabbable}
     />
   ));
 }

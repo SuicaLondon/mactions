@@ -1,21 +1,21 @@
+import type { Job } from '../../../../../../shared/api/types';
 import { jobRunnerName } from '../../../../../../shared/lib/activity-format';
 import { cn } from '../../../../../../shared/lib/cn';
-import { type JobWorkspaceDetail } from '../JobWorkspaceDetail';
-import { WorkspaceTimestamp } from '../WorkspaceTimestamp';
+import { Timestamp } from '../../../../shared/components/Timestamp';
+import { jobHostingLabel } from '../../../models/job-hosting';
 
 export function JobMetadata({
   job,
-  selectedRunner,
-  hosting,
+  ranOnSelectedRunner,
 }: {
-  job: Parameters<typeof JobWorkspaceDetail>[0]['job'];
-  selectedRunner: boolean;
-  hosting: string;
+  job: Job;
+  /** The job ran on the runner the page is showing. */
+  ranOnSelectedRunner: boolean;
 }) {
   return (
     <dl
       className={cn(
-        'job-workspace-meta mx-0 mt-1 mb-3 grid grid-cols-2 gap-x-6 gap-y-2.25 border-t',
+        'mx-0 mt-1 mb-3 grid grid-cols-2 gap-x-6 gap-y-2.25 border-t',
         'border-t-line px-0 pt-2.5 pb-0 text-xs max-lg:gap-x-3.5 max-lg:gap-y-1.25',
         '@max-lg/job-detail:grid-cols-1',
       )}
@@ -24,11 +24,11 @@ export function JobMetadata({
         <dt className="w-14 shrink-0 text-muted">Runner</dt>
         <dd className="m-0 min-w-0 leading-normal wrap-anywhere">
           {jobRunnerName(job)}
-          {!!selectedRunner && (
+          {!!ranOnSelectedRunner && (
             <span
               className={cn(
-                'selected-runner-mark ml-1.5 border-l-2 border-l-accent pl-1.25 text-xs',
-                'whitespace-nowrap text-muted',
+                'ml-1.5 rounded-sm bg-accent/10 px-1 text-xs',
+                'whitespace-nowrap text-accent',
               )}
             >
               Selected runner
@@ -38,18 +38,18 @@ export function JobMetadata({
       </div>
       <div className="flex min-w-0 items-baseline gap-1.75">
         <dt className="w-14 shrink-0 text-muted">Hosting</dt>
-        <dd className="m-0 min-w-0 leading-normal wrap-anywhere">{hosting}</dd>
+        <dd className="m-0 min-w-0 leading-normal wrap-anywhere">{jobHostingLabel(job)}</dd>
       </div>
       <div className="flex min-w-0 items-baseline gap-1.75">
         <dt className="w-14 shrink-0 text-muted">Started</dt>
         <dd className="m-0 min-w-0 leading-normal wrap-anywhere">
-          <WorkspaceTimestamp value={job.started_at} compact />
+          <Timestamp value={job.started_at} format="time" />
         </dd>
       </div>
       <div className="flex min-w-0 items-baseline gap-1.75">
         <dt className="w-14 shrink-0 text-muted">Finished</dt>
         <dd className="m-0 min-w-0 leading-normal wrap-anywhere">
-          <WorkspaceTimestamp value={job.completed_at} compact />
+          <Timestamp value={job.completed_at} format="time" />
         </dd>
       </div>
       {!!job.labels?.length && (

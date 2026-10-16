@@ -1,16 +1,27 @@
 # Working conventions
 
-Keep changes small and direct. Preserve unrelated work. Write code, comments, and repository documents in English; explain technical terms to the user in both Chinese and English.
+Read the documents for each field a change touches before editing.
 
-Prefer `if` / `else`, early returns, and `switch`. Use `switch` for chains with more than four conditional branches; a final `else` does not count. A ternary is allowed only when a statement is impractical, with a narrowly scoped `eslint-disable-next-line no-ternary` comment explaining why.
+## Frontend
 
-## Read before editing
+- **TS/JS structure or React:** [structure](docs/agents/structure.md) and [React and TypeScript](docs/agents/react.md).
+- **JSX classes or CSS:** [styling](docs/agents/styling.md).
+- **UI layout, states, copy, or visual changes:** [design](docs/design.md).
 
-- **TS/JS structure or React:** read [structure](docs/agents/structure.md) and [React](docs/agents/react.md).
-- **JSX classes or CSS:** also read [styling](docs/agents/styling.md).
-- **Rust:** read [Rust](docs/agents/rust.md).
-- **Scripts, lint, Git hooks, or agent automation:** read [tooling](docs/agents/tooling.md).
-- **Domain behavior:** read [domain](docs/domain.md); for navigation, history, or logs, also read [activity navigation](docs/activity-navigation.md).
+## Backend
+
+- **Rust:** [Rust](docs/agents/rust.md).
+- **Module boundaries or new services:** [architecture](docs/architecture.md).
+
+## Tooling
+
+- **Scripts, lint, Git hooks, or agent automation:** [tooling](docs/agents/tooling.md).
+- **Dev server or local setup:** [development](docs/development.md).
+
+## Product and domain
+
+- **Product decisions or user-facing behavior:** [product](docs/product.md) and [feature targets](docs/product-scope.md).
+- **Domain terms and rules:** [domain](docs/domain.md); for navigation, history, or logs, also [activity navigation](docs/activity-navigation.md).
 
 ## Finish every editing task
 
